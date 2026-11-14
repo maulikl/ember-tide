@@ -5,6 +5,13 @@ minor versions, and each entry says what to check when upgrading.
 
 ## Unreleased
 
+- **Update check and in-app update.** The server checks once a day for a new release (one plain request to GitHub; turn it
+  off in Studio, Help, or with `ET_UPDATE_CHECK=off`), and Studio tells the owner when one is out. The Android app can update
+  itself from Settings, App version: it downloads the new APK from the release, checks its checksum and that it's signed with
+  the same key and newer, then hands it to Android's installer. Each release now includes a `latest.json` manifest.
+- **Hearing about updates.** The testing guide and the Android guide explain how to get an email for each release
+  and how to let Obtainium install new Android app versions from the GitHub releases.
+
 ## 0.1.12
 
 **Upgrade note:** the half-degree °F option is gone; anyone who used it sees whole degrees, and a target saved at a half degree shows rounded.

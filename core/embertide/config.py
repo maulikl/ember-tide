@@ -48,6 +48,7 @@ def resolve_tz() -> tuple[str, str]:
 # Where phone pushes go when this server has no Firebase key of its own. One constant so it is easy to change; a
 # self-hoster points ET_PUSH_RELAY_URL at their own copy of relay/.
 DEFAULT_PUSH_RELAY_URL = "https://embertide.homepush.dev"
+DEFAULT_UPDATE_URL = "https://github.com/Ncbudd/ember-tide/releases/latest/download/latest.json"
 
 
 def push_relay_url() -> str:
@@ -94,6 +95,8 @@ class Config:
     push_relay_url: str = field(default_factory=push_relay_url)
     web_dir: Path | None = field(default_factory=lambda: Path(p) if (p := _env("ET_WEB_DIR")) else None)
     demo: bool = field(default_factory=lambda: (_env("ET_DEMO", "off") or "off").lower() in ("on", "1", "true", "yes"))
+    update_check: bool = field(default_factory=lambda: (_env("ET_UPDATE_CHECK", "on") or "on").lower() not in ("off", "0", "false", "no"))
+    update_url: str = field(default_factory=lambda: _env("ET_UPDATE_URL", DEFAULT_UPDATE_URL) or DEFAULT_UPDATE_URL)
 
     def __post_init__(self) -> None:
         if self.demo:
@@ -101,6 +104,7 @@ class Config:
             self.push_relay = False
             self.ha_mqtt_url = None
             self.llm_url = None
+            self.update_check = False
 
     @property
     def db_path(self) -> Path:

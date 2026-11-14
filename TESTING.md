@@ -71,7 +71,10 @@ Tick off what you can, and tell us about anything that confused you, not only th
 
 ## Updating and backing up
 
-Nothing updates itself. [Updating and backups](docs/install.md#e-updating-and-backups) shows how to pull a new version and what to copy (the `data` folder). Take a backup before every update.
+The server and the app tell you when a new version is out (Studio shows a banner; the app offers it in Settings, App version). Other ways to hear about new versions:
+
+- **Server:** on the GitHub page, choose **Watch → Custom → Releases** to get an email for each release. [Updating and backups](docs/install.md#e-updating-and-backups) shows how to pull a new version and what to copy (the `data` folder). Take a backup before every update.
+- **Android app:** [Obtainium](https://github.com/ImranR98/Obtainium) can watch the releases and offer each new APK as an update; see [Updates with Obtainium](docs/android.md#updates-with-obtainium). Or update from Settings, App version in the app, or download the new APK and install it over the old one.
 
 ## Removing it completely
 

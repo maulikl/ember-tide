@@ -1,5 +1,9 @@
 import asyncio
+import os
 import sys
+
+# No daily update check from test apps (it would reach GitHub after 120 s); test_updates.py turns it on per app.
+os.environ.setdefault("ET_UPDATE_CHECK", "off")
 
 # The MQTT client (paho under aiomqtt) needs add_reader(), which Windows' default Proactor loop doesn't have.
 # The app sets the same policy in __main__; Linux/Docker is unaffected.

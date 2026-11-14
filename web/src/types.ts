@@ -105,3 +105,17 @@ export interface AiSettings {
 }
 export interface AiTestResult { ok: boolean; model?: string; ms?: number; reply?: string; error?: string }
 export interface AiModelList { ok: boolean; models: string[]; error?: string }
+
+export interface UpdateArtifact { url: string; sha256: string; size: number }
+export interface UpdateInfo {
+  current: string;
+  enabled: boolean;
+  env_enabled: boolean;
+  latest: string | null;
+  version_code: number | null;
+  available: boolean;
+  notes_url: string | null;
+  checked_at: number | null;
+  error: string | null;
+  android: Partial<Record<"full" | "minimal" | "wear", UpdateArtifact>>;
+}

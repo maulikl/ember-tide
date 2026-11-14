@@ -30,12 +30,28 @@ Open the app, type your server's address (`192.168.1.20:8790` at home, or `https
 `http://`: for a home address the app tries `https://`, then plain `http://`, then the usual port 8790 if you left the port out. It
 accepts plain `http://` only for addresses on your home network; anything else must be `https://`.
 
-**Updates.** Nothing updates itself. When a new release comes out, download the newer APK and install it over the old one: your
+**Updates.** When your server sees a new release, the app offers it in Settings, App version (see [Updating the app](#updating-the-app)). Or
+download the newer APK and install it over the old one: your
 sign-in and settings stay. Android only accepts an update with a higher version number signed with the same key, which every release is.
 Switching between the Google-push and no-Google apps works the same way: both have the same id and the same key, so installing one over the other
 keeps your sign-in and settings (tested). After switching, open More, Settings, Notifications on this phone once more: going from Google push to
 no-Google clears the old Google push registration, and going the other way offers Google push again. The app carries its own copy of the web interface, so
 update it after a server upgrade to get the newest screens. The watch app is updated the same way, with `adb install -r` or from the watch's own installer.
+
+### Updates with Obtainium
+
+[Obtainium](https://github.com/ImranR98/Obtainium) is a free, open-source app that watches a project's GitHub releases and
+installs new APKs for you, with no app store.
+
+1. Install Obtainium (from its GitHub releases, F-Droid or IzzyOnDroid).
+2. In Obtainium, tap **Add App** and paste `https://github.com/Ncbudd/ember-tide`.
+3. Under **Filter APKs by regular expression**, type `android-google-push` or `android-no-google`, whichever you installed
+   (for the watch app, `wear-os`). Without the filter Obtainium asks which file to use each time.
+4. Tap **Add**. Obtainium checks for new releases in the background and offers each one as an update; Android installs it
+   only because it's signed with the same key as the app you have.
+
+Obtainium only tracks full releases, not test builds. Update the server too when a new release comes out: the app and the
+server are meant to run the same version.
 
 ### Which server can use which app
 
@@ -207,5 +223,7 @@ the tile and complication. The crown only changes the temperature after you tap 
 
 ## Updating the app
 
-Install the newer APK over the old one (`adb install -r`, or open the file): same id and same key, so settings and sign-in stay. See
+When your server sees a newer release, open **Settings → App version** in the app and tap **Update**. The first time, Android asks you to allow installing updates from Ember & Tide; allow it and tap **Update** again.
+
+You can also install the newer APK over the old one (`adb install -r`, or open the file): same id and same key, so settings and sign-in stay. See
 [Download the app](#download-the-app). The app carries its own copy of the web interface, so after a server upgrade update the app too to get the newest screens.

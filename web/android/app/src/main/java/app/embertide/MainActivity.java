@@ -45,6 +45,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(EmberHealthPlugin.class);
         registerPlugin(EmberPushPlugin.class);
         registerPlugin(EmberPhonePlugin.class);
+        registerPlugin(EmberUpdatePlugin.class);
         super.onCreate(savedInstanceState);
         applyOrientation(getResources().getConfiguration());
         windowInfo = new WindowInfoTrackerCallbackAdapter(WindowInfoTracker.getOrCreate(this));

@@ -2,7 +2,7 @@ import { registerPlugin } from "@capacitor/core";
 import { App as CapApp } from "@capacitor/app";
 import { handleBack } from "./components/back";
 import { api, appServer, appToken, isApp } from "./api";
-import type { Snapshot } from "./types";
+import type { Snapshot, UpdateArtifact } from "./types";
 
 interface EmberNative {
   configure(o: { server: string; token: string; person: string }): Promise<void>;
@@ -219,3 +219,32 @@ export const phoneSetRadius = (meters: number) => Phone.setRadius({ meters });
 export const phoneSetHomeWifi = () => Phone.setHomeWifi();
 export const phoneSendNow = () => Phone.sendNow();
 export const phoneOpenSettings = () => Phone.openSettings();
+
+/* ---------- App update (Android app only) ---------- */
+export interface AppUpdateInfo {
+  versionCode: number;
+  versionName: string;
+  flavor: "full" | "minimal";
+}
+interface EmberUpdate {
+  info(): Promise<AppUpdateInfo>;
+  install(o: UpdateArtifact): Promise<{ started: boolean }>;
+  addListener(eventName: "progress", cb: (ev: { percent: number }) => void): Promise<{ remove: () => Promise<void> }>;
+}
+const Update = registerPlugin<EmberUpdate>("EmberUpdate");
+export const appUpdateInfo = (): Promise<AppUpdateInfo | null> =>
+  isApp() ? Update.info().catch(() => null) : Promise.resolve(null);
+export async function appUpdateInstall(
+  a: UpdateArtifact,
+  onProgress?: (percent: number) => void,
+): Promise<{ started: boolean }> {
+  if (!isApp()) return { started: false };
+  const handle = onProgress
+    ? await Update.addListener("progress", ev => onProgress(ev.percent)).catch(() => null)
+    : null;
+  try {
+    return await Update.install(a);
+  } finally {
+    void handle?.remove();
+  }
+}

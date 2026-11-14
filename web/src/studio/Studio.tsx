@@ -9,7 +9,7 @@ import Horizon from "../components/Horizon";
 import { useApp } from "../ctx";
 import { useAuth } from "../auth";
 import { clock, cToF, eventText, personaColor, sourceText, STATE_TEXT, temp, weight, weightUnit, h12 } from "../format";
-import type { EventRow } from "../types";
+import type { EventRow, UpdateInfo } from "../types";
 import Access from "./Access";
 import Autopilot from "./Autopilot";
 import Devices from "./Devices";
@@ -117,7 +117,12 @@ function Overview() {
   const { snap, me } = useApp();
   const auth = useAuth();
   const [events, setEvents] = useState<EventRow[]>([]);
+  const [update, setUpdate] = useState<UpdateInfo | null>(null);
   useEffect(() => { const f = () => api.get<EventRow[]>("/api/events?limit=30").then(setEvents).catch(() => {}); f(); const t = setInterval(f, 5000); return () => clearInterval(t); }, []);
+  useEffect(() => {
+    if (!auth.isOwner || auth.state.demo) return;
+    api.get<UpdateInfo>("/api/update").then(setUpdate).catch(() => {});
+  }, [auth.isOwner, auth.state.demo]);
   if (!snap) return null;
   const u = me?.settings.units ?? "F";
   const name = (id: string | null) => snap.people.find(p => p.id === id)?.name ?? "";
@@ -125,6 +130,17 @@ function Overview() {
     <>
       <LeakBanner />
       <GuestBanner />
+      {auth.isOwner && !auth.state.demo && update?.available && update.latest && (
+        <div className="box setup-banner" role="status" style={{ borderColor: "color-mix(in srgb, var(--acc) 55%, var(--line))", background: "color-mix(in srgb, var(--acc) 8%, var(--surf))", padding: "10px 16px" }}>
+          <div className="row" style={{ flexWrap: "wrap", gap: 10 }}>
+            <span><b style={{ fontWeight: 500 }}>Ember &amp; Tide {update.latest} is out</b> (you have {update.current}).</span>
+            <div className="pills">
+              {update.notes_url && <a className="btn" href={update.notes_url} target="_blank" rel="noopener">What's new</a>}
+              <NavLink to="/studio/help#updates" className="btn pri">How to update</NavLink>
+            </div>
+          </div>
+        </div>
+      )}
       {!auth.state.demo && needsWelcome(me, auth.state.enabled, auth.me?.person) && (
         <div className="box setup-banner" role="status" style={{ borderColor: "color-mix(in srgb, var(--acc) 55%, var(--line))", background: "color-mix(in srgb, var(--acc) 8%, var(--surf))", padding: "10px 16px" }}>
           <div className="row" style={{ flexWrap: "wrap", gap: 10 }}>

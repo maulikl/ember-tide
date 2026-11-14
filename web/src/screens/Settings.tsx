@@ -24,7 +24,8 @@ import { SettingsWorkDays, SettingsWearable, SettingsWebPush, SetupAgain } from 
 import { isApp } from "../api";
 import { colorKey, COLORS, cToF, personaColor, weightUnit } from "../format";
 import { compactPref, type CompactPref, setCompactPref } from "../keyboard";
-import type { Learning, PersonSettings, Snapshot } from "../types";
+import { appUpdateInfo, appUpdateInstall, type AppUpdateInfo } from "../native";
+import type { Learning, PersonSettings, Snapshot, UpdateInfo } from "../types";
 
 const AP_PHASES = [["wind_down", "Wind-down"], ["fall_asleep", "Fall asleep"], ["deep", "Deep"], ["late", "Late night"], ["wake", "Warm wake"]] as const;
 const AP_REC = ["fall_asleep", "deep", "late"];
@@ -253,6 +254,7 @@ export default function Settings() {
       <CareFold owner={auth.isOwner} />
       <Account />
       <SetupAgain person={me.id} />
+      {isApp() && <AppVersion />}
       </div>
       <p className="mute" style={{ fontSize: 12, textAlign: "center" }}>Devices, exporting your data and more are in <Link to="/studio">Studio</Link>.</p>
       {checking && <Sheet onClose={() => setChecking(false)} aria-label="Check sides with the bed">
@@ -286,6 +288,57 @@ function KeyboardLayout() {
     <div className="item" style={{ display: "grid", gap: 8 }}>
       <span>Keyboard layout<br /><span className="mute" style={{ fontSize: 12 }}>For phones with a keyboard: everything on one screen, with key hints instead of tabs. Press ? to see the keys. This phone only.</span></span>
       <div className="seg">{(["auto", "on", "off"] as const).map(x => <button key={x} aria-pressed={v === x} onClick={() => pick(x)}>{x === "auto" ? "Automatic" : x === "on" ? "On" : "Off"}</button>)}</div>
+    </div>
+  );
+}
+
+/** Android app only: installed version and in-app update from GitHub releases. */
+function AppVersion() {
+  const [appInfo, setAppInfo] = useState<AppUpdateInfo | null>(null);
+  const [update, setUpdate] = useState<UpdateInfo | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [pct, setPct] = useState<number | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isApp()) return;
+    void appUpdateInfo().then(setAppInfo);
+    api.get<UpdateInfo>("/api/update").then(setUpdate).catch(() => {});
+  }, []);
+
+  if (!appInfo) return null;
+  const artifact = update?.android?.[appInfo.flavor];
+  const newer = !!(update?.latest && update.version_code != null && update.version_code > appInfo.versionCode && artifact);
+  const upToDate = !!(update?.version_code != null && update.version_code <= appInfo.versionCode);
+
+  const install = async () => {
+    if (!artifact || busy) return;
+    setBusy(true);
+    setPct(0);
+    setErr(null);
+    try {
+      await appUpdateInstall(artifact, p => setPct(p));
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+      setPct(null);
+    }
+  };
+
+  return (
+    <div className="card list">
+      <div className="row">
+        <span>App version<br /><span className="mute" style={{ fontSize: 12 }}>{appInfo.versionName}</span></span>
+        {newer ? (
+          <button type="button" className="btn pri" disabled={busy} onClick={install}>
+            {busy ? `Downloading… ${pct ?? 0}%` : `Update to ${update!.latest}`}
+          </button>
+        ) : upToDate ? (
+          <span className="mute" style={{ fontSize: 13 }}>Up to date</span>
+        ) : null}
+      </div>
+      {err && <p className="err" role="status" style={{ paddingBottom: 4 }}>{err}</p>}
     </div>
   );
 }

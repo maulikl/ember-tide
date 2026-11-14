@@ -226,6 +226,8 @@ def create_app(cfg: Config | None = None) -> FastAPI:
         housekeeping_task = _asyncio.get_running_loop().create_task(housekeeping())
         from . import trace as _trace                 # night trace for tuning (data dir/traces, ET_TRACE=off to stop)
         trace_task = None if cfg.demo else _asyncio.get_running_loop().create_task(_trace.run(state.controller, cfg.data_dir))
+        from .updates import update_loop
+        update_task = None if cfg.demo else _asyncio.get_running_loop().create_task(update_loop(cfg, store))
         demo_reset_task = _asyncio.get_running_loop().create_task(demo_reset_loop(state)) if cfg.demo else None
         log.info("Ember & Tide %s · bed driver %s · tz %s%s", __version__, driver.id, cfg.tz, " · DEMO" if cfg.demo else "")
         yield
@@ -234,6 +236,8 @@ def create_app(cfg: Config | None = None) -> FastAPI:
         housekeeping_task.cancel()
         if trace_task is not None:
             trace_task.cancel()
+        if update_task is not None:
+            update_task.cancel()
         await state.ha.stop()
         state.cloud.stop()
         state.notifier.stop()
@@ -316,6 +320,8 @@ def create_app(cfg: Config | None = None) -> FastAPI:
     app.include_router(build_ai_router(state))
     from .assistant_api import build_assistant_router         # Ask: answers + proposed changes with confirm / undo
     app.include_router(build_assistant_router(state))
+    from .updates import build_update_router                  # release manifest check + settings
+    app.include_router(build_update_router(state))
 
     @app.middleware("http")
     async def security_headers(request, call_next):

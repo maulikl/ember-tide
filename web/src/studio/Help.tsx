@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { h12 } from "../format";
 import { Link, useLocation } from "react-router-dom";
 import { api, appServer } from "../api";
+import { useAuth } from "../auth";
+import type { UpdateInfo } from "../types";
 
 /**
  * Studio → Help: what everything means, in plain words. Each section has a stable id for deep links
@@ -170,6 +172,7 @@ function highlight(text: string, q: string): ReactNode {
 }
 
 export default function Help() {
+  const auth = useAuth();
   const [q, setQ] = useState("");
   const [all, setAll] = useState(false);                 // every answer open (searching opens the matches too)
   const loc = useLocation();
@@ -202,8 +205,10 @@ export default function Help() {
         {version && <> Ember &amp; Tide version <b>{version}</b> (include it when you report a problem).</>}</p>
         {!q && <button className="pill" aria-pressed={all} onClick={() => setAll(a => !a)}>{all ? "Close all answers" : "Show all answers"}</button>}</div>
       {!q && <nav className="chips help-toc" aria-label="Help sections">
+        {!auth.state.demo && <a className="chip" href="#updates">Updates</a>}
         {SECTIONS.map(s => <a key={s.id} className="chip" href={`#${s.id}`}>{s.title}</a>)}
       </nav>}
+      {!q && !auth.state.demo && <UpdatesCard fallbackVersion={version} />}
       {shown.length === 0 && <div className="box"><p className="mute">Nothing matches "{q}". Try a shorter word.</p></div>}
       {shown.map(sec => (
         <section key={sec.id} id={sec.id} className="box help-sec">
@@ -222,6 +227,115 @@ export default function Help() {
         </section>
       ))}
     </div>
+  );
+}
+
+function relativeChecked(ts: number | null): string {
+  if (ts == null) return "Never";
+  const diff = Math.max(0, Math.floor(Date.now() / 1000 - ts));
+  if (diff < 60) return "Just now";
+  if (diff < 3600) {
+    const m = Math.floor(diff / 60);
+    return `${m} ${m === 1 ? "minute" : "minutes"} ago`;
+  }
+  if (diff < 86400) {
+    const h = Math.floor(diff / 3600);
+    return `${h} ${h === 1 ? "hour" : "hours"} ago`;
+  }
+  const d = Math.floor(diff / 86400);
+  return `${d} ${d === 1 ? "day" : "days"} ago`;
+}
+
+function UpdatesCard({ fallbackVersion }: { fallbackVersion: string | null }) {
+  const auth = useAuth();
+  const [info, setInfo] = useState<UpdateInfo | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (auth.state.demo) return;
+    api.get<UpdateInfo>("/api/update").then(setInfo).catch(() => {});
+  }, [auth.state.demo]);
+
+  if (auth.state.demo) return null;
+
+  const checkNow = async () => {
+    setChecking(true);
+    setErr(null);
+    try {
+      setInfo(await api.post<UpdateInfo>("/api/update/check"));
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const toggleEnabled = async (enabled: boolean) => {
+    setSaving(true);
+    setErr(null);
+    try {
+      setInfo(await api.put<UpdateInfo>("/api/update/settings", { enabled }));
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const current = info?.current ?? fallbackVersion ?? "—";
+  const latestText = info?.latest
+    ? info.available
+      ? `${info.latest} (update available)`
+      : `${info.latest} (up to date)`
+    : "Not checked yet";
+
+  return (
+    <section id="updates" className="box help-sec">
+      <h2>Updates</h2>
+      <table className="t">
+        <tbody>
+          <tr><td>Current version</td><td className="num">{current}</td></tr>
+          <tr>
+            <td>Latest seen</td>
+            <td className="num">
+              {latestText}
+              {info?.available && info.notes_url && <> · <a href={info.notes_url} target="_blank" rel="noopener">What's new</a></>}
+            </td>
+          </tr>
+          <tr><td>Last checked</td><td>{relativeChecked(info?.checked_at ?? null)}</td></tr>
+        </tbody>
+      </table>
+      {(err || info?.error) && <p className="err" role="status">{err || info?.error}</p>}
+      {auth.isOwner && info && (
+        <div style={{ display: "grid", gap: 8 }}>
+          <div className="row" style={{ flexWrap: "wrap", gap: 10 }}>
+            <label className="row" style={{ gap: 10, cursor: info.env_enabled ? "pointer" : "default" }}>
+              <span>Check for updates once a day</span>
+              <input
+                type="checkbox"
+                className="toggle"
+                checked={info.enabled}
+                disabled={!info.env_enabled || saving}
+                onChange={e => toggleEnabled(e.target.checked)}
+              />
+            </label>
+            <button type="button" className="btn" disabled={checking || !info.enabled} onClick={checkNow}>
+              {checking ? "Checking…" : "Check now"}
+            </button>
+          </div>
+          {!info.env_enabled && (
+            <p className="mute" style={{ fontSize: 13, margin: 0 }}>
+              Turned off on the server (<code>ET_UPDATE_CHECK=off</code>).
+            </p>
+          )}
+        </div>
+      )}
+      <p className="mute" style={{ fontSize: 13, margin: 0 }}>
+        Updating the server: pull the new image and recreate the container (see the install guide). The phone app can update itself from Settings.
+      </p>
+    </section>
   );
 }
 

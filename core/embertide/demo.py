@@ -49,6 +49,7 @@ def apply_demo_config(cfg) -> None:
     cfg.ha_mqtt_url = None
     cfg.llm_url = None
     cfg.auth = False
+    cfg.update_check = False
 
 
 # ---------- centralized demo allow / deny policy ----------
@@ -89,6 +90,8 @@ DEMO_BLOCKED_ROUTES: list[tuple[str | None, re.Pattern[str]]] = [
     ("DELETE", re.compile(r"^/api/client-errors$")),
     ("GET", re.compile(r"^/api/client-errors$")),          # one visitor's text is not shown to the next
     ("POST", re.compile(r"^/api/client-error$")),
+    ("PUT", re.compile(r"^/api/update/settings$")),
+    ("POST", re.compile(r"^/api/update/check$")),
 ]
 
 DEMO_ALLOWED_MUTATIONS: list[tuple[str, re.Pattern[str]]] = [

@@ -537,6 +537,7 @@ OWNER_ONLY = [
     re.compile(r"^/api/ai/settings"),                                    # the model address and key
     re.compile(r"^/api/hub(/|$)"),                                      # the control unit's detail (network name, address) and maintenance
     re.compile(r"^/api/dial-beacons$"),                                  # Studio's dial map; the phone app never reads it
+    re.compile(r"^/api/update/(settings|check)$"),                       # update check switch and manual check (GET /api/update is readable by any account)
 ]
 # no sign-in, the address itself is the key: OAuth redirects (single-use state) and owner-made webhooks (secret URL)
 PUBLIC_PATTERNS = [("GET", re.compile(r"^/api/cloud/[a-z]{2,20}/callback$")), ("POST", re.compile(r"^/api/hooks/[A-Za-z0-9_]{2,20}/[A-Za-z0-9_\-]{16,64}$"))]
