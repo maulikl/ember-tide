@@ -5,6 +5,11 @@ minor versions, and each entry says what to check when upgrading.
 
 ## Unreleased
 
+## 0.1.13
+
+**Upgrade note:** install this Android app version by hand one last time (from the release, as before). From then on the app
+can update itself from Settings, App version.
+
 - **Update check and in-app update.** The server checks once a day for a new release (one plain request to GitHub; turn it
   off in Studio, Help, or with `ET_UPDATE_CHECK=off`), and Studio tells the owner when one is out. The Android app can update
   itself from Settings, App version: it downloads the new APK from the release, checks its checksum and that it's signed with
