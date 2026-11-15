@@ -5,9 +5,8 @@ minor versions, and each entry says what to check when upgrading.
 
 ## Unreleased
 
-- **Lying in lasts while you're in bed.** After your wake time your side keeps its warm wake going until you get up,
-  instead of turning off 45 minutes later while you're still asleep. A 4-hour limit stays as a safety net.
-
+- **Nights away stay out of insights.** Insights, the tuning guide and Ask now leave out nights while you were marked away,
+  like the Sleep screen already did, so a pet on your side no longer turns into advice for you. While you're away they say so.
 - **Insights you don't want can be put away.** Any card on Studio → Insights & Ask now has a "Not now" button that hides it across your devices until its wording or suggestion changes (or after 14 days for informational cards), with a "Show" link at the end of each group to peek at hidden cards, and the Ask panel can be tucked away with a "Hide" link.
 - **No "hasn't sent anything" card for a watch you replaced.** If one source of watch or ring readings stops but another
   still sends (for example after moving from Health Sync to Health Connect), Insights no longer says it has gone quiet.
