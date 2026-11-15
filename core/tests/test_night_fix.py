@@ -209,3 +209,16 @@ async def test_summary_follows_which_to_trust(tmp_path):
     n.p1.settings.autopilot.trust_more = "bed"
     b = C.lean_on(_sum(n), C.compare_night(n.c, n.p1, D), stages, n.clock.now_ts())
     assert b["in_bed_at"] == bed["in_bed_at"] and b["in_bed_min"] == bed["in_bed_min"] and "bed_times" not in b
+
+
+def test_watch_that_starts_asleep_doesnt_set_the_in_bed_time():
+    """A watch night that begins with sleep (no awake stretch) can't know when you got in, and one that ends at waking
+    can't know when you got up: the bed's earlier in / later out is used, so "to drift off" isn't a false 0 min."""
+    bed = {"in_bed_at": 1000.0, "fell_asleep_est": 1900.0, "out_at": 30_000.0}
+    blind = {"start": 1800.0, "asleep_at": 1800.0, "woke_at": 29_000.0, "end": 29_000.0}
+    t = C.chosen_times(bed, blind, None, "wearable", {})
+    assert t["in_bed_at"] == {"ts": 1000, "source": "bed"} and t["out_at"] == {"ts": 30_000, "source": "bed"}
+    assert t["asleep_at"] == {"ts": 1800, "source": "watch"} and t["woke_at"]["source"] == "watch"
+    aware = {"start": 1500.0, "asleep_at": 1800.0, "woke_at": 28_000.0, "end": 29_000.0}     # it saw you awake first
+    t2 = C.chosen_times(bed, aware, None, "wearable", {})
+    assert t2["in_bed_at"]["source"] == "watch" and t2["out_at"]["source"] == "watch"

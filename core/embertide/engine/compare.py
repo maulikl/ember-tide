@@ -237,7 +237,14 @@ def chosen_times(bed: dict, wear: dict | None, fix: dict | None, trust: str, off
         if b is not None and k in ("in_bed_at", "out_at"):
             adj = off.get("in" if k == "in_bed_at" else "out") or 0
             b = b - adj
-        if w is not None and b is not None and abs(w - b) <= 3 * 3600:
+        # A watch whose night starts the moment it saw sleep (no awake stretch first) doesn't know when you got into bed,
+        # and one that ends the moment you woke doesn't know when you got up: the bed's earlier in / later out wins then.
+        blind = wear is not None and (
+            (k == "in_bed_at" and wear.get("asleep_at") is not None and wear["start"] >= wear["asleep_at"] - 60)
+            or (k == "out_at" and wear.get("woke_at") is not None and wear["end"] <= wear["woke_at"] + 60))
+        if (blind and w is not None and b is not None and trust != "bed" and 0 < (w - b if k == "in_bed_at" else b - w) <= 3 * 3600):
+            out[k] = {"ts": round(b), "source": "bed" if not (off.get("in") or off.get("out")) else "bed, adjusted"}
+        elif w is not None and b is not None and abs(w - b) <= 3 * 3600:
             if trust == "wearable" or (k in ("asleep_at", "woke_at") and trust != "bed"):
                 out[k] = {"ts": round(w), "source": "watch"}
             elif trust == "bed":
