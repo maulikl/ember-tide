@@ -337,7 +337,7 @@ html:not(.et-hidden) .wl-pcard[aria-checked=true] .pa *{animation-play-state:run
   box-shadow:0 8px 22px -12px rgba(0,0,0,.6);cursor:pointer;opacity:0;pointer-events:none;transform:translate3d(-50%,8px,0);
   transition:opacity .35s ease,transform .45s var(--ease-out)}
 .wl-morehint svg{width:18px;height:18px}
-.wl-mid.more .wl-morehint{opacity:1;pointer-events:auto;transform:translate3d(-50%,0,0)}
+.wl-mid.hint .wl-morehint{opacity:1;pointer-events:auto;transform:translate3d(-50%,0,0)}
 .wl.leaving .wl-morehint{opacity:0}
 
 /* the bar: always Back on the left, Next on the right, Skip (optional steps only) just left of Next */

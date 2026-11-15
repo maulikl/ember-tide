@@ -5,6 +5,10 @@ minor versions, and each entry says what to check when upgrading.
 
 ## Unreleased
 
+- **Setup and Help layout fixes.** In setup, the "More below" pill no longer covers the work-day buttons: it shows only
+  when a good part of the step is hidden, and goes away once you scroll. On a phone, a link to a Studio section (Help,
+  Updates) no longer leaves the heading under the tab row.
+
 ## 0.1.13
 
 **Upgrade note:** install this Android app version by hand one last time (from the release, as before). From then on the app

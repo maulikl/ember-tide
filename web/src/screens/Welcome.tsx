@@ -59,6 +59,7 @@ const NOTIFY: [keyof PersonSettings["notify"], string, string][] = [
 const toMin = (hm: string) => { const [h, m] = hm.split(":").map(Number); return h * 60 + m; };
 const evening = (hm: string) => (toMin(hm) + 12 * 60) % 1440;              // minutes since noon, so 01:00 sorts after 23:00
 const fromEvening = (x: number) => { const t = ((x - 12 * 60) % 1440 + 1440) % 1440; return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`; };
+const MORE_HINT_MIN_PX = 160;   // hidden content needed before the "More below" pill shows (more than a row of buttons)
 const hm12 = (hm: string) => { const [h, m] = hm.split(":").map(Number); return `${((h + 11) % 12) + 1}${m ? `:${String(m).padStart(2, "0")}` : ""} ${h < 12 ? "AM" : "PM"}`; };
 
 export default function Welcome({ me, onDone }: { me: PersonView; onDone: () => void }) {
@@ -358,18 +359,27 @@ export default function Welcome({ me, onDone }: { me: PersonView; onDone: () => 
   useEffect(() => (i > 0 && !saving && !leaving ? pushBack(back) : undefined), [i, saving, leaving]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   // "more below": a soft fade and a small hint while there's more to scroll to (the step's content can change size)
+  // The "More below" pill floats over the content, so it only shows while a good part of the step is hidden and the
+  // person hasn't scrolled yet; a short overflow (a row of buttons) gets just the fade, never a pill on top of it.
   const [more, setMore] = useState(false);
+  const [hint, setHint] = useState(false);
   useEffect(() => {
     const el = body.current;
     if (!el) return;
-    const check = () => setMore(el.scrollHeight - el.clientHeight - el.scrollTop > 24);
+    let scrolled = false;
+    const check = () => {
+      const left = el.scrollHeight - el.clientHeight - el.scrollTop;
+      setMore(left > 24);
+      setHint(!scrolled && left > MORE_HINT_MIN_PX);
+    };
+    const onScroll = () => { if (el.scrollTop > 8) scrolled = true; check(); };
     check();
-    el.addEventListener("scroll", check, { passive: true });
+    el.addEventListener("scroll", onScroll, { passive: true });
     const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(check) : null;
     ro?.observe(el);
     if (el.firstElementChild) ro?.observe(el.firstElementChild);
     const t = window.setTimeout(check, 700);                    // after the step's entrance animation
-    return () => { el.removeEventListener("scroll", check); ro?.disconnect(); clearTimeout(t); };
+    return () => { el.removeEventListener("scroll", onScroll); ro?.disconnect(); clearTimeout(t); };
   }, [i]);
 
   // the scene: both colours on the first screen, then the chosen person's, moving only where it matters
@@ -391,7 +401,7 @@ export default function Welcome({ me, onDone }: { me: PersonView; onDone: () => 
         </div>}
         {!last && <button type="button" className="link wl-skipall" data-key="s" disabled={saving} onClick={() => { setErr(null); go(flow.length - 1); }}>Skip setup</button>}
       </div>
-      <div className={`wl-mid${more ? " more" : ""}`}>
+      <div className={`wl-mid${more ? " more" : ""}${hint ? " hint" : ""}`}>
         <div className="wl-body" ref={body} tabIndex={-1}>
           <section key={cur.key} className={`wl-step wl-${cur.key}`} data-dir={dir}>
             {cur.optional && <p className="wl-eyebrow">Optional · you can do this later</p>}

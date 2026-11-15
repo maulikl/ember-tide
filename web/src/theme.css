@@ -1128,6 +1128,8 @@ button.bz-half{cursor:pointer}
     -webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent);
     scroll-padding-inline:40px;overscroll-behavior-x:contain}
   .snav a,.snav .link{min-height:44px;display:inline-flex;align-items:center}
+  /* a jump to a section (Help #updates, Integrations) lands below the pinned tab row: 44px tabs + 8px padding + border, plus a gap */
+  .studio .help-sec,.studio .addflow,.studio h2.intsec{scroll-margin-top:calc(65px + max(8px,env(safe-area-inset-top)))}
   .smain{padding-left:max(16px,env(safe-area-inset-left));padding-right:max(16px,env(safe-area-inset-right));padding-bottom:max(60px,env(safe-area-inset-bottom))}
 }
 
