@@ -5,23 +5,28 @@ minor versions, and each entry says what to check when upgrading.
 
 ## Unreleased
 
+## 0.1.15
+
+Update the server and the phone app together: the new Steps switch and the "Is that you in bed?" question need both.
+
 - **Asks whether it's you or your pet when the signs disagree.** When someone gets on your side of the bed while your watch
   says it isn't you or your phone counts you walking around (using the new **Steps** switch in From this phone), a
   high-priority notification asks right away so you can tap who's there. Saying it's your pet keeps that side out of
   your night until it's empty and undoes a false start.
+- **Resume when your night is on hold.** If your side turned off because the bed saw nobody there for a while (or lost
+  a pet lying on it), Tonight now shows Resume, which picks your night back up. Before, "Turn on" was accepted and
+  cancelled straight away.
+- **Your side stays ready for bed after a false start.** If a pet (or a short lie-down) starts your night and the side
+  then empties, it now keeps the getting-in temperature until you get in, instead of turning off after 30 minutes.
+  A night that's really under way still turns off when you're up for a while.
+- **A phone picked up from the bedside stops vouching for you.** One scan of your side's dial no longer counts as you
+  being in bed for the next 20 minutes once the phone has been picked up and used since.
 - **Got into bed and got up from the bed when the watch can't know.** A watch night that starts the moment it saw sleep
   (or ends the moment you woke) no longer sets the night's in-bed or got-up time: the bed's is used, so the Sleep summary
   doesn't show a false "0 min to drift off" or start the night late.
 - **"Night screen by default" applies right away.** Turning it on or off now changes Tonight straight away, even if
   the screen was already open; before, it could need a trip away and back. A night screen you opened yourself stays open.
-- **A phone picked up from the bedside stops vouching for you.** One scan of your side's dial no longer counts as you
-  being in bed for the next 20 minutes once the phone has been picked up and used since.
-- **Your side stays ready for bed after a false start.** If a pet (or a short lie-down) starts your night and the side
-  then empties, it now keeps the getting-in temperature until you get in, instead of turning off after 30 minutes.
-  A night that's really under way still turns off when you're up for a while.
-- **Resume when your night is on hold.** If your side turned off because the bed saw nobody there for a while (or lost
-  a pet lying on it), Tonight now shows Resume, which picks your night back up. Before, "Turn on" was accepted and
-  cancelled straight away.
+
 ## 0.1.14
 
 - **The Sleep summary follows "Which to trust more".** When you lean on your watch (the default), the night's story uses
