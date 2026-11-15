@@ -22,16 +22,22 @@ const same = (a: number[] | null | undefined, b: number[]) => !!a && a.length ==
 
 /** The owner's hub detail, refreshed every few seconds while the page is open. */
 export function useHubDetail(every = 5000, enabled = true): HubDetail | null {
+  return useHubState(every, enabled).d;
+}
+
+/** The hub's details, and whether the last request for them failed (so a screen can say so instead of "Loading…"). */
+export function useHubState(every = 5000, enabled = true): { d: HubDetail | null; failed: boolean } {
   const [d, setD] = useState<HubDetail | null>(null);
+  const [failed, setFailed] = useState(false);
   useEffect(() => {
     if (!enabled) return;
     let live = true;
-    const load = () => api.get<HubDetail>("/api/hub").then(r => live && setD(r)).catch(() => {});
+    const load = () => api.get<HubDetail>("/api/hub").then(r => { if (live) { setD(r); setFailed(false); } }).catch(() => { if (live) setFailed(true); });
     load();
     const t = window.setInterval(load, every);
     return () => { live = false; window.clearInterval(t); };
   }, [every, enabled]);
-  return d;
+  return { d, failed };
 }
 
 const has = (snap: Snapshot, cap: string) => snap.system.capabilities.includes(cap);

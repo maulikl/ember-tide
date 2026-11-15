@@ -18,9 +18,10 @@ import ShowMore from "./ShowMore";
 const EVENT = "et-care";
 
 /** The care list, refreshed when anything changes it (on any screen) and once a minute (a new day changes "due"). */
-export function useCare(): { care: CareData | null; reload: () => void } {
+export function useCare(): { care: CareData | null; reload: () => void; failed: boolean } {
   const [care, setCare] = useState<CareData | null>(null);
-  const reload = useCallback(() => { api.get<CareData>("/api/care").then(setCare).catch(() => {}); }, []);
+  const [failed, setFailed] = useState(false);
+  const reload = useCallback(() => { api.get<CareData>("/api/care").then(c => { setCare(c); setFailed(false); }).catch(() => setFailed(true)); }, []);
   const { snap } = useApp();
   const water = snap?.system.hub?.water_ok ?? null;
   useEffect(() => {
@@ -32,7 +33,7 @@ export function useCare(): { care: CareData | null; reload: () => void } {
     return () => { window.clearInterval(t); window.removeEventListener(EVENT, reload); document.removeEventListener("visibilitychange", vis); };
   }, [reload]);
   useEffect(() => { reload(); }, [water, reload]);        // the hub's water status changed in the live snapshot
-  return { care, reload };
+  return { care, reload, failed };
 }
 const changed = () => window.dispatchEvent(new Event(EVENT));
 
@@ -155,9 +156,9 @@ function AddSheet({ onClose }: { onClose: () => void }) {
 
 /** Studio → Bed hub → Care: every job as a card, then "Add your own". */
 export function CareSection({ owner }: { owner: boolean }) {
-  const { care } = useCare();
+  const { care, failed } = useCare();
   const [adding, setAdding] = useState(false);
-  if (!care) return <div className="box"><span className="k">Care</span><span className="mute">Loading…</span></div>;
+  if (!care) return <div className="box"><span className="k">Care</span><span className="mute">{failed ? "Couldn't load the care list. It tries again in a minute." : "Loading…"}</span></div>;
   return (
     <div className="box care-section">
       <span className="k">Care</span>

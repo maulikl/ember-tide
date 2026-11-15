@@ -43,6 +43,8 @@ export default function Access() {
   const [swapAsk, setSwapAsk] = useState(false);
   const [checkFor, setCheckFor] = useState<string | null>(null);
   const [loadErr, setLoadErr] = useState(false);
+  // a button's request failed: say so (the list would otherwise just look unchanged)
+  const guard = (what: string, f: () => Promise<void>) => async () => { try { await f(); } catch (x) { say(`Couldn't ${what}: ${(x as Error).message}`); } };
   const load = () => {
     setLoadErr(false);
     Promise.all([
@@ -126,6 +128,7 @@ export default function Access() {
   return (
     <>
       {header}
+      {loadErr && <div className="box"><span className="mute">Some invites or keys couldn't be loaded, so a list below may be missing items.</span><div><button className="pill" onClick={load}>Retry</button></div></div>}
       {sides}
       {modes}
       {pets}
@@ -141,7 +144,7 @@ export default function Access() {
                     <option value="">No side</option>{snap.people.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></td>
                   <td><select value={u.role} onChange={async e => { try { await api.patch(`/api/auth/users/${u.id}`, { role: e.target.value }); load(); } catch (x) { say((x as Error).message); } }}>
                     <option value="owner">Owner</option><option value="sleeper">Sleeper</option><option value="viewer">Viewer</option></select></td>
-                  <td style={{ textAlign: "right", whiteSpace: "nowrap" }}><button className="pill" onClick={async () => { const r = await api.post<{ path: string }>(`/api/auth/users/${u.id}/reset`); setReset({ user: u.username, link: `${publicOrigin()}${r.path}` }); }}>Reset password</button>{" "}
+                  <td style={{ textAlign: "right", whiteSpace: "nowrap" }}><button className="pill" onClick={guard("make a reset link", async () => { const r = await api.post<{ path: string }>(`/api/auth/users/${u.id}/reset`); setReset({ user: u.username, link: `${publicOrigin()}${r.path}` }); })}>Reset password</button>{" "}
                     {u.id !== auth.me?.id && (confirm === u.id
                     ? <><button className="pill" style={{ borderColor: "var(--bad)", color: "var(--bad)" }} onClick={async () => { try { await api.del(`/api/auth/users/${u.id}`); say(`Removed ${u.username}`); } catch (x) { say((x as Error).message); } setConfirm(null); load(); }}>Remove {u.username}?</button>{" "}
                         <button className="pill" onClick={() => setConfirm(null)}>Keep</button></>
@@ -176,7 +179,7 @@ export default function Access() {
             {invites.length > 0 && <>
               <span className="k" style={{ marginTop: 6 }}>Open invites</span>
               {invites.map(i => <div className="row" key={i.id}><span>{i.role === "viewer" ? "Viewer" : pname(i.person)} · {i.role}<br /><small className="mute">made {day(i.created)}, works until {day(i.expires)}</small></span>
-                <button className="pill" onClick={async () => { await api.del(`/api/auth/invites/${i.id}`); if (invites.length <= 1) setLink(null); load(); }}>Cancel</button></div>)}
+                <button className="pill" onClick={guard("cancel the invite", async () => { await api.del(`/api/auth/invites/${i.id}`); if (invites.length <= 1) setLink(null); load(); })}>Cancel</button></div>)}
             </>}
           </div>
         </div>
@@ -199,7 +202,7 @@ export default function Access() {
             {tokens.map(t => <tr key={t.id}><td>{t.name}</td><td>{t.role === "owner" ? "Full control" : t.role === "viewer" ? "Read only" : `${pname(t.person)}'s side`}</td>
               <td className="mute">{t.last_used ? day(t.last_used) : "never"}</td>
               <td style={{ textAlign: "right" }}>{confirm === t.id
-                ? <><button className="pill" style={{ borderColor: "var(--bad)", color: "var(--bad)" }} onClick={async () => { await api.del(`/api/auth/tokens/${t.id}`); setConfirm(null); say(`Revoked ${t.name}`); load(); }}>Revoke?</button>{" "}<button className="pill" onClick={() => setConfirm(null)}>Keep</button></>
+                ? <><button className="pill" style={{ borderColor: "var(--bad)", color: "var(--bad)" }} onClick={guard("revoke the key", async () => { await api.del(`/api/auth/tokens/${t.id}`); setConfirm(null); say(`Revoked ${t.name}`); load(); })}>Revoke?</button>{" "}<button className="pill" onClick={() => setConfirm(null)}>Keep</button></>
                 : <button className="pill" onClick={() => setConfirm(t.id)}>Revoke</button>}</td></tr>)}
           </tbody></table>
           <span className="k" style={{ marginTop: 6 }}>Phone widgets and watches</span>
@@ -209,7 +212,7 @@ export default function Access() {
             {devKeys.map(k => <tr key={k.id}><td>{k.username ?? "?"}<br /><small className="mute">{pname(k.person)}</small></td><td>{deviceKeyName(k)}</td>
               <td className="mute">{k.last_used ? day(k.last_used) : "never"}</td>
               <td style={{ textAlign: "right" }}>{confirm === k.id
-                ? <><button className="pill" style={{ borderColor: "var(--bad)", color: "var(--bad)" }} onClick={async () => { await api.del(`/api/auth/tokens/${k.id}`); setConfirm(null); say(`Revoked ${k.username ?? ""}'s ${deviceKeyName(k).toLowerCase()} key`); load(); }}>Revoke?</button>{" "}<button className="pill" onClick={() => setConfirm(null)}>Keep</button></>
+                ? <><button className="pill" style={{ borderColor: "var(--bad)", color: "var(--bad)" }} onClick={guard("revoke the key", async () => { await api.del(`/api/auth/tokens/${k.id}`); setConfirm(null); say(`Revoked ${k.username ?? ""}'s ${deviceKeyName(k).toLowerCase()} key`); load(); })}>Revoke?</button>{" "}<button className="pill" onClick={() => setConfirm(null)}>Keep</button></>
                 : <button className="pill" onClick={() => setConfirm(k.id)}>Revoke</button>}</td></tr>)}
           </tbody></table>
         </div>
