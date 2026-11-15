@@ -164,3 +164,23 @@ async def test_replay_last_night_with_an_early_owner_names_the_sleep_sign(tmp_pa
     assert r.started_count(r.p1) == 1 and r.timeline(r.p1)[-1][1] == "done"
     assert not sam_notes(got)
     assert not [n for n in got if n.kind in ("wearable", "bed_silent", "sensor", "target", "account", "reach", "bridge", "storage")]
+
+
+async def test_insights_and_the_tuning_guide_leave_her_away_nights_out(tmp_path):
+    # 2026-11-15: the dog's nights on an away partner's side became "settling takes 158 minutes" and "you get into bed
+    # 162 min late" in her insights; the Sleep screen already showed those nights as away
+    from embertide.engine.guide import tuning_guide
+    from embertide.engine.insights import insights
+    from embertide.engine.summary import recent
+    r = setup(tmp_path)
+    plan = Plan().sleep("left", "22:40", "06:50")
+    plan.at("21:00", lambda x: x.bed.pets.update(right=58)).at("07:30", lambda x: x.bed.pets.pop("right", None))
+    await r.run("2026-11-06T10:00", script=plan)
+    now = r.clock.now_ts()
+    ns = recent(r.store, r.p2, r.c.clock.tz, now, 7)
+    assert ns and all(n.get("away") and not n.get("has_data") for n in ns if n["date"] == "2026-11-05")
+    cards = insights(r.p2, ns, r.c.clock.tz, now)
+    assert [c["id"] for c in cards] == ["away"]
+    assert not [g for g in tuning_guide(r.c, r.p2, now) if g.get("evidence")]
+    # Autopilot still sees the night, so it can say why it was left out
+    assert any(n["date"] == "2026-11-05" and n.get("has_data") for n in recent(r.store, r.p2, r.c.clock.tz, now, 7, hide_away=False))
