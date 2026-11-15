@@ -8,6 +8,8 @@ minor versions, and each entry says what to check when upgrading.
 - **Got into bed and got up from the bed when the watch can't know.** A watch night that starts the moment it saw sleep
   (or ends the moment you woke) no longer sets the night's in-bed or got-up time: the bed's is used, so the Sleep summary
   doesn't show a false "0 min to drift off" or start the night late.
+- **"Night screen by default" applies right away.** Turning it on or off now changes Tonight straight away, even if
+  the screen was already open; before, it could need a trip away and back. A night screen you opened yourself stays open.
 ## 0.1.14
 
 - **The Sleep summary follows "Which to trust more".** When you lean on your watch (the default), the night's story uses
