@@ -2,7 +2,7 @@ import { useState } from "react";
 import { api } from "../api";
 import Sheet from "../components/Sheet";
 import { CareSection, LightGuide, useCare } from "../components/Care";
-import { LightControl, QuietFanControl, useHubDetail } from "../components/HubControls";
+import { LightControl, QuietFanControl, useHubState } from "../components/HubControls";
 import { useApp } from "../ctx";
 import { sideWord } from "./deviceKinds";
 
@@ -23,7 +23,7 @@ const RAW_NAMES: Record<string, string> = { reservoir: "reservoir", ctank_left: 
 
 export default function Hub() {
   const { snap, say } = useApp();
-  const d = useHubDetail();
+  const { d, failed: hubFailed } = useHubState();
   const { care } = useCare();
   const [sheet, setSheet] = useState<null | "restart" | "fill">(null);
   const [busy, setBusy] = useState(false);
@@ -49,7 +49,7 @@ export default function Hub() {
 
       <div className="grid2">
         <div className="box"><span className="k">Status</span>
-          {!d?.available ? <span className="mute">{d ? "This bed doesn't report hub details." : "Loading…"}</span> : <>
+          {!d?.available ? <span className="mute">{d ? "This bed doesn't report hub details." : hubFailed ? "Couldn't reach the hub details. Trying again…" : "Loading…"}</span> : <>
             <div className="row"><strong style={{ fontSize: 20 }}>{d.line}</strong>
               <span className="dot" aria-hidden="true" style={{ background: d.ok ? "var(--good)" : "var(--warn)" }} /></div>
             {(d.faults ?? []).map(f => (
