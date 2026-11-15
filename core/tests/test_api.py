@@ -147,3 +147,85 @@ def test_set_away_ends_active_flash(tmp_path):
         assert r1.status_code == 200 and r1.json()["people"][0]["night"]["flash"] is not None
         r2 = c.post("/api/people/p1/away", json={"away": True})
         assert r2.status_code == 200 and r2.json()["people"][0]["night"]["flash"] is None
+
+
+def test_dismiss_non_guide_insight_sig_and_expiry(tmp_path, monkeypatch):
+    import embertide.studio_api as S
+
+    cards = [
+        {
+            "id": "fb_warm",
+            "severity": "suggest",
+            "title": "Feels warm lately",
+            "detail": "Try lowering Deep by 1 degree.",
+            "evidence": ["3 warm check-ins"],
+            "proposal": {"rhythm_id": "weeknights", "phase_id": "deep", "field": "temp_c", "from": 19.0, "to": 18.0},
+        },
+        {
+            "id": "need_data",
+            "severity": "info",
+            "title": "Just getting started",
+            "detail": "A few more nights will sharpen patterns.",
+            "evidence": [],
+            "proposal": None,
+        },
+    ]
+    monkeypatch.setattr(S, "insights", lambda p, nights, tz, now_ts: [dict(x) for x in cards])
+    monkeypatch.setattr(S, "tuning_guide", lambda ctl, p, now_ts: [])
+
+    with client(tmp_path) as c:
+        by_id = lambda: {i["id"]: i for i in c.get("/api/people/p1/insights").json()}
+        init = by_id()
+        assert not init["fb_warm"].get("dismissed") and not init["need_data"].get("dismissed")
+
+        # Dismiss both non-guide cards (proposal uses proposal.to, info uses title)
+        assert c.post("/api/people/p1/insights/dismiss", json={"id": "fb_warm", "sig": "18.0"}).status_code == 200
+        assert c.post("/api/people/p1/insights/dismiss", json={"id": "need_data", "sig": "Just getting started"}).status_code == 200
+        hidden = by_id()
+        assert hidden["fb_warm"].get("dismissed") is True
+        assert hidden["need_data"].get("dismissed") is True
+
+        # Changing proposal target or info title brings the card back
+        cards[0]["proposal"] = {**cards[0]["proposal"], "to": 17.5}
+        cards[1]["title"] = "Still getting started"
+        changed = by_id()
+        assert not changed["fb_warm"].get("dismissed")
+        assert not changed["need_data"].get("dismissed")
+
+        # Dismiss with the new signatures, then jump forward 14 days
+        assert c.post("/api/people/p1/insights/dismiss", json={"id": "fb_warm", "sig": "17.5"}).status_code == 200
+        assert c.post("/api/people/p1/insights/dismiss", json={"id": "need_data", "sig": "Still getting started"}).status_code == 200
+        assert by_id()["need_data"].get("dismissed") is True
+
+        clk = c.app.state.et_state.controller.clock
+        clk.jump_to(clk.now_ts() + 14 * 86400 + 60)
+        after = by_id()
+        assert after["fb_warm"].get("dismissed") is True    # proposal card stays dismissed
+        assert not after["need_data"].get("dismissed")      # info card expires after 14 days
+
+
+def test_dismiss_rejects_bad_insight_id(tmp_path):
+    with client(tmp_path) as c:
+        for bad in ("", "a" * 61, "bad id", "bad/id", "bad:id", "bad.id", "ok_id\n"):
+            r = c.post("/api/people/p1/insights/dismiss", json={"id": bad, "sig": "x"})
+            assert r.status_code == 422, f"expected 422 for {bad!r}"
+        for ok_id in ("a", "A_1-b", "x" * 60):
+            assert c.post("/api/people/p1/insights/dismiss", json={"id": ok_id, "sig": "x"}).status_code == 200
+
+
+def test_show_ask_setting_default_and_patch(tmp_path):
+    with client(tmp_path) as c:
+        hh = c.get("/api/household").json()
+        assert hh["people"][0]["settings"]["show_ask"] is True
+        units_before = hh["people"][0]["settings"]["units"]
+
+        r1 = c.patch("/api/people/p1/settings", json={"show_ask": False})
+        assert r1.status_code == 200
+        assert r1.json()["people"][0]["settings"]["show_ask"] is False
+        assert r1.json()["people"][0]["settings"]["units"] == units_before
+        assert c.get("/api/household").json()["people"][0]["settings"]["show_ask"] is False
+
+        r2 = c.patch("/api/people/p1/settings", json={"show_ask": True})
+        assert r2.status_code == 200
+        assert r2.json()["people"][0]["settings"]["show_ask"] is True
+        assert c.get("/api/household").json()["people"][0]["settings"]["show_ask"] is True

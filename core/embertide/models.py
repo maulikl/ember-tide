@@ -225,6 +225,7 @@ class PersonSettings(BaseModel):
     notify: NotifyPrefs = Field(default_factory=NotifyPrefs)
     # "Let the assistant make small changes for me": tonight warmer/cooler within ±1.5 °C, flashes (assistant.py)
     assistant_small_changes: bool = False
+    show_ask: bool = True                # whether Studio's Insights & Ask page shows the Ask panel (follows the person across devices)
     work_days: list[int] = Field(default_factory=lambda: [0, 1, 2, 3, 4], max_length=7)   # 0 = Monday; days this person works
     wearable: str = Field("", max_length=20, pattern=r"^[a-z_]*$")   # first-time setup's pick ("oura", "apple", "none"...)
     setup_steps: list[str] = Field(default_factory=list, max_length=30)   # first-time setup steps already done (skipped next time)
