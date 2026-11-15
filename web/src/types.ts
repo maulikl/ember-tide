@@ -18,6 +18,7 @@ export interface PersonSettings {
   hot_flash: FlashSettings; cold_flash: FlashSettings; autopilot: AutopilotPolicy; partner_can_flash: boolean; partner_can_adjust: boolean;
   notify: { away_precool: boolean; empty_side: boolean; left_on?: boolean; not_started?: boolean; morning: boolean; problems: boolean; hub?: boolean; maintenance?: boolean; account?: boolean; reach?: boolean; bridge?: boolean; storage?: boolean; wearable?: boolean; bed_silent?: boolean; sensor?: boolean; target?: boolean; review?: boolean; pet_question?: boolean; quiet_hours?: boolean };
   tone?: "calm" | "friendly" | "cheeky";
+  show_ask?: boolean;
   work_days?: number[]; wearable?: string; setup_steps?: string[];
   pet_questions?: boolean; wake_with_alarm?: boolean; in_bed_after_min?: number | null; up_after_min?: number | null;
 }
