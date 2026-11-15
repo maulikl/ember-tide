@@ -15,6 +15,9 @@ minor versions, and each entry says what to check when upgrading.
 - **Your side stays ready for bed after a false start.** If a pet (or a short lie-down) starts your night and the side
   then empties, it now keeps the getting-in temperature until you get in, instead of turning off after 30 minutes.
   A night that's really under way still turns off when you're up for a while.
+- **Resume when your night is on hold.** If your side turned off because the bed saw nobody there for a while (or lost
+  a pet lying on it), Tonight now shows Resume, which picks your night back up. Before, "Turn on" was accepted and
+  cancelled straight away.
 ## 0.1.14
 
 - **The Sleep summary follows "Which to trust more".** When you lean on your watch (the default), the night's story uses

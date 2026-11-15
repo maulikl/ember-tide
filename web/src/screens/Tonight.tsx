@@ -331,6 +331,15 @@ export default function Tonight({ setSimpleOn }: { setSimpleOn: (v: boolean) => 
                 <span className="num fl-left">{mmss(n.flash.end - snap.now)} left</span></span>
               <span className="pills"><button className="pill" onClick={() => act(`${base}/flash/extend`)}>+{target.settings[n.flash.kind === "hot" ? "hot_flash" : "cold_flash"].extend_min} min</button><button className="pill" onClick={() => act(`${base}/flash/stop`)}>Stop</button></span>
             </div>
+          ) : showTurnOn && n.state === "out_of_bed" ? (
+            // the night is on, but the side went off after the out-of-bed hold (or the bed lost whoever was there):
+            // "Turn on" here means "carry on with my night", not a by-hand session the night would cancel at once
+            <div className="card turnon">
+              <div className="row">
+                <span>Your night is on hold<small className="mute" style={{ display: "block", fontSize: 12 }}>The bed hasn't seen anyone on {target.id === me.id ? "your" : `${target.name}'s`} side for a while</small></span>
+                <button className="btn pri go" data-key="n" disabled={!connected} onClick={() => act(`${base}/tonight`, { action: "resume" })}>Resume</button>
+              </div>
+            </div>
           ) : showTurnOn ? (
             <div className="turnon-slot">
               {target.id === me.id && <TodayCard me={me} snap={snap} />}
