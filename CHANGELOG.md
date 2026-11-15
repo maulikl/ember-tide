@@ -12,6 +12,9 @@ minor versions, and each entry says what to check when upgrading.
   the screen was already open; before, it could need a trip away and back. A night screen you opened yourself stays open.
 - **A phone picked up from the bedside stops vouching for you.** One scan of your side's dial no longer counts as you
   being in bed for the next 20 minutes once the phone has been picked up and used since.
+- **Your side stays ready for bed after a false start.** If a pet (or a short lie-down) starts your night and the side
+  then empties, it now keeps the getting-in temperature until you get in, instead of turning off after 30 minutes.
+  A night that's really under way still turns off when you're up for a while.
 ## 0.1.14
 
 - **The Sleep summary follows "Which to trust more".** When you lean on your watch (the default), the night's story uses
