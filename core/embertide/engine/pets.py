@@ -35,6 +35,7 @@ RANGE_WINDOW_S = 600    # outside-range / signature: judged over this long
 RANGE_COVER_S = 480     # readings must cover at least this much of it
 RANGE_SHARE = 0.8       # and this share of them must look like the pet
 AWAY_CONFIRM_S = 180    # the sleeper away: lying there this long (the usual 3-minute "in bed" confirm) is the pet
+CONFIRMED_EMPTY_S = 120  # "it's the dog" (live question answer) lasts until the side has been empty this long
 PHONE_HOLD_S = 300      # the phone saying "not by the bed" must hold this long (before bedtime only)
 
 
@@ -111,6 +112,7 @@ class PetGuard:
         occupied = bool(side and side.occupied)
         if occupied:
             st["occ_since"] = st["occ_since"] or now
+            st["empty_since"] = None
             if not getattr(side, "echo", False) and (side.hr is not None or side.br is not None):
                 h = st["hist"]
                 if not h or now - h[-1][0] >= 10:
@@ -120,9 +122,17 @@ class PetGuard:
         else:
             st["occ_since"], st["high_since"] = None, None
             st["hist"], st["range_on"] = [], False
+            # "It's the dog" (a live question, petq.ask_live) holds until the side has really been empty a while, not
+            # through a blip of the strip while the dog shifts
+            st["empty_since"] = st.get("empty_since") or now
+            if now - st["empty_since"] >= CONFIRMED_EMPTY_S:
+                st.pop("confirmed", None)
         if not occupied or out["scale_person"]:
             st["away_radar"] = [0, 0]
             return out
+        if st.get("confirmed"):
+            name = st["confirmed"]
+            return {**out, "suspected": True, "pet": name, "evidence": "answer", "why": f"you said it's {name}"}
         if away and watch != "me" and not getattr(side, "echo", False):
             # the side's sleeper is away (and it isn't lent to a guest): whatever lies there for a few minutes isn't
             # them. A radar that sees someone there for most of the stretch could be a person (a house guest, the

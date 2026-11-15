@@ -3,7 +3,7 @@ import { api } from "../api";
 import { pushClear } from "../native";
 
 export interface PetQ {
-  id: string; zone: string; kind: "pet" | "unexplained"; status: string; answer: string | null;
+  id: string; zone: string; kind: "pet" | "unexplained" | "live"; status: string; answer: string | null;
   title: string; detail: string; start: number; end: number;
   choices: { answer: "yes" | "me" | "unsure"; pet?: string; label: string }[];
 }

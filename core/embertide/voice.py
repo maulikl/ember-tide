@@ -92,6 +92,17 @@ PHRASES: dict[str, dict[str, list[Variant]]] = {
                    ("{who} on the bed around {when}: guilty or innocent?", "Your verdict helps tell you and your pet apart."),
                    ("Someone furry on the bed around {when}? Was it {who}?", "Answer here and it'll know your pet from you.")],
     },
+    "pet_live": {   # someone on your side while your phone or watch says you're up ({sign}: what disagrees)
+        "calm": [("Is that you in bed, or {who}?", "{sign}. Tap who it is."),
+                 ("Is {who} on your side right now?", "{sign}. Tap whether it's you or {who}."),
+                 ("In bed, or is that {who}?", "{sign}. Tap who's there.")],
+        "friendly": [("Is that you in bed, or {who}?", "{sign}. A quick tap says who's there."),
+                     ("Did {who} take your side?", "{sign}. Tap whether it's you or {who}."),
+                     ("You in bed, or {who} keeping it warm?", "{sign}. Tap who it is.")],
+        "cheeky": [("Is {who} pretending to be you again?", "{sign}. Tap who's really there."),
+                   ("Who's on your side: you or {who}?", "{sign}. Name the culprit."),
+                   ("{who} keeping your spot warm?", "{sign}. Tap who it is, and no fibbing.")],
+    },
     "not_started": {   # lying in the side a while, but the bed couldn't tell it was them: offer to start it
         "calm": [("Your side hasn't started", "You've been lying down a while, but the bed couldn't tell it was you. Start it now?"),
                  ("Your night hasn't started yet", "You seem to be in bed, but the bed couldn't tell it was you. Start it now?"),

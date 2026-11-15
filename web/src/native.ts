@@ -190,7 +190,7 @@ export async function pushClear(kind: string) { if (isApp()) { try { await Push.
 export async function pushBeforeSignOut() { if (isApp()) { try { await Push.disable(); } catch { /* ignore */ } } }
 
 /* ---------- From this phone (Android app only) ---------- */
-export type PhoneSource = "location" | "wifi" | "calendar" | "alarm" | "charging" | "watch" | "dial" | "watch_hr";
+export type PhoneSource = "location" | "wifi" | "calendar" | "alarm" | "charging" | "watch" | "dial" | "watch_hr" | "steps";
 export interface PhoneStatus {
   sources: Record<PhoneSource, { on: boolean; state: "ok" | "needs_permission" | "needs_background" | "unavailable" | "needs_watch_permission" }>;
   device: string; home_set: boolean; radius_m: number; home_ssid: string | null;
@@ -198,7 +198,8 @@ export interface PhoneStatus {
   /** live watch heart rate: the watch's permission ("granted" / "needed" / "needs_background" / "unknown"), last relay */
   watch_hr?: { perm: string; last_sent: number; last_count: number; wanted: boolean };
   last: { home?: boolean; distance_km?: number; heading_home?: boolean; eta_min?: number; wifi_home?: boolean; charging?: boolean;
-          bedtime_mode?: boolean; next_alarm?: number; watch_connected?: boolean; dials?: { minor: number; rssi: number }[] };
+          bedtime_mode?: boolean; next_alarm?: number; watch_connected?: boolean; dials?: { minor: number; rssi: number }[];
+          steps_total?: number; steps_at?: number };
   denied?: string; saved?: boolean;
 }
 interface EmberPhone {

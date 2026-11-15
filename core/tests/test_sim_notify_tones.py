@@ -205,7 +205,8 @@ def test_every_notification_phrase_fits_a_phone_in_every_tone(kind):
              "what": "Purification tablets are due", "advice": "Check the hub's vents aren't blocked and follow the maker's steps.",
              "why": "Keeps the water in the hub clean.", "more": " 2 other jobs are due too.", "day": "Wednesday",
              "service": "Withings", "hours": 12, "free": "600 MB", "n": 12,
-             "device": "your watch or ring", "now": "74 °C", "want": "68 °C"}
+             "device": "your watch or ring", "now": "74 °C", "want": "68 °C",
+             "sign": "Your phone counted 1250 steps since then"}
     want = voice.slots_of(voice.PHRASES[kind]["calm"][0])
     for tone in TONES:
         for i, v in enumerate(voice.PHRASES[kind][tone]):

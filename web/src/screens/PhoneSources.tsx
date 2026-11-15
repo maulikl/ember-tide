@@ -15,6 +15,7 @@ const SOURCES: { key: PhoneSource; label: string; why: string }[] = [
   { key: "watch", label: "Watch connected", why: "Your watch still paired nearby is a small sign you're home." },
   { key: "watch_hr", label: "Watch heart rate (live)", why: "At night your watch (a Galaxy Watch or any Wear OS watch) shares its heart rate every few minutes, so the bed can tell you from a pet or the other side's echo. Only at night, only to your own server; it uses the heart rate your watch already measures." },
   { key: "dial", label: "Bedside dial nearby", why: "At night, with the phone charging, a short Bluetooth listen for the bedside dial: a phone by your dial counts a little toward you being in bed." },
+  { key: "steps", label: "Steps", why: "Counts steps on this phone, so if something's on your side of the bed while you're walking around, it can ask whether it's your pet. Only the step count goes to your own server." },
 ];
 
 /** "Watch heart rate (live)" once it's on: what it did last. */
@@ -34,6 +35,7 @@ const DENIED: Record<string, string> = {
   background: "Location is only allowed while the app is open, so home and away stop when it's closed. Choose \"Allow all the time\".",
   calendar: "Calendar wasn't allowed.",
   bluetooth: "Nearby devices wasn't allowed.",
+  steps: "Physical activity wasn't allowed.",
 };
 
 /** What the phone said last, in a few words ("home", "12 km away, heading home"). */
@@ -60,6 +62,7 @@ const SHORT: Record<PhoneSource, string> = {
   watch: "Your watch nearby is a small sign you're home.",
   watch_hr: "Your watch's heart rate at night helps tell you from a pet.",
   dial: "Notices the bedside dial nearby while the phone charges.",
+  steps: "Counts your steps to tell if you're walking around while your side's occupied.",
 };
 
 /** "From this phone": switches for what the Android app can tell the bed by itself. Only inside the app.

@@ -135,7 +135,10 @@ def build_identity_router(state) -> APIRouter:
             return None
         v = petq.view(q, c.household, c.clock.tz, clock_style(p.settings))
         from . import voice                               # the question, in this person's tone
-        v["title"] = voice.say("pet_question", {"who": v["who"], "when": v["when"]}, person=p, day=c.clock.now().date())[0]
+        if q.get("kind") == "live":
+            v["title"] = voice.say("pet_live", {"who": v["who"], "sign": petq.live_sign(q)}, person=p, day=c.clock.now().date())[0]
+        else:
+            v["title"] = voice.say("pet_question", {"who": v["who"], "when": v["when"]}, person=p, day=c.clock.now().date())[0]
         return v
 
     @r.post("/people/{pid}/pet-question/{qid}")
