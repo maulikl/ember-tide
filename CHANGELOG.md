@@ -5,6 +5,17 @@ minor versions, and each entry says what to check when upgrading.
 
 ## Unreleased
 
+## 0.1.14
+
+- **The Sleep summary follows "Which to trust more".** When you lean on your watch (the default), the night's story uses
+  the watch's times: got into bed, fell asleep, woke and got up, the time in bed worked out from them, and "asleep" from
+  the watch's stages. It used to mix the bed's times with the watch's, so the numbers didn't add up. Trusting the bed
+  keeps the bed's numbers.
+- **The demo's sample nights follow the plan.** The public demo's past week showed the bed several degrees off its plan
+  and suggested "the bed lags behind the plan"; that came from how the demo builds its nights, not from the controller.
+- **Studio says when something fails.** People & access buttons (reset password, cancel invite, revoke) show an error
+  if they fail, and a list that couldn't load says so. Bed hub and Care say they couldn't load instead of Loading… forever.
+- **Each watch or ring is named once** in the Sleep page's "Readings from …".
 - **Setup fixes.** "Run first-time setup again" works even right after finishing setup, and says so if it fails.
   Skipping setup keeps your region's temperature unit, as the last screen showed.
 - **Small app fixes.** Last night's review shows its suggestion in your units and with the phase's name (it showed °C
