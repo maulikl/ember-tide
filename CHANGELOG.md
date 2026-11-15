@@ -5,6 +5,9 @@ minor versions, and each entry says what to check when upgrading.
 
 ## Unreleased
 
+- **Steadier insight suggestions.** "Settling takes…" uses your typical night and only shows while it's still true lately,
+  "too warm/too cold" says how many mornings, and a change goes to the rhythm (weeknights or weekends) those nights belong to.
+
 - **No "hasn't sent anything" card for a watch you replaced.** If one source of watch or ring readings stops but another
   still sends (for example after moving from Health Sync to Health Connect), Insights no longer says it has gone quiet.
 - **Check for an app update from the phone.** Settings, App version now has Check now: the server looks for a new
