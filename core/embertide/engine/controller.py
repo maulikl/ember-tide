@@ -43,6 +43,9 @@ class Controller:
         self.context: dict[str, dict] = {}                                                # from context devices
         self._ctx_home: dict[str, bool | None] = {}
         self._last_cmd: dict[str, float] = {}
+        # Real-time gap between automatic commands (MIN_CMD_GAP_S unless set). The demo's seeding runs a week of virtual
+        # nights in a few real seconds and sets 0, or nearly every plan change would be dropped.
+        self.min_cmd_gap_s: float | None = None
         self._inflight: dict[str, asyncio.Task] = {}
         self._inflight_key: dict[str, tuple[bool, float | None]] = {}
         self._pending_force: set[str] = set()
@@ -1068,7 +1071,8 @@ class Controller:
         t = time.monotonic()
         fails = self.__dict__.setdefault("_unconfirmed", {})       # zone → (command, times it went unconfirmed)
         last_key, n_fail = fails.get(p.zone, (None, 0))
-        gap = MIN_CMD_GAP_S * (2 ** min(n_fail, 6)) if last_key == key else MIN_CMD_GAP_S   # same command: back off to ~8 min
+        base_gap = MIN_CMD_GAP_S if self.min_cmd_gap_s is None else self.min_cmd_gap_s
+        gap = base_gap * (2 ** min(n_fail, 6)) if last_key == key else base_gap   # same command: back off to ~8 min
         if inflight_running:
             if forced:
                 # Preserve forced commands (such as turning the bed off) if an earlier command is still in flight.

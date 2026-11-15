@@ -274,6 +274,7 @@ async def seed_demo_store(store: Store, tz_name: str, now_ts: float, household: 
     store.put("sources", [c.model_dump() for c in default_sim_sources()])
     sources = SourceManager(store, clock, lambda: bed, demo=True)
     ctl = Controller(hh, bed, store, clock, sources=sources, demo=True)
+    ctl.min_cmd_gap_s = 0.0      # virtual nights in real seconds: let every plan change reach the simulated bed
 
     # Bulk-seed SQLite without waiting on per-statement fsync, restoring durability afterwards.
     with store._lock:
