@@ -398,7 +398,7 @@ class Autopilot:
                     else:
                         left.append({"date": n.get("date"), "why": why})
                 return out_
-            allns = [n for n in recent(self.c.store, p, self.c.clock.tz, now, 45)
+            allns = [n for n in recent(self.c.store, p, self.c.clock.tz, now, 45, hide_away=False)
                      if n.get("has_data") and not n.get("in_progress") and (n.get("in_bed_at") or 0) >= since
                      and (n.get("in_bed_min") or 0) >= 30]           # (barely in bed at all: not worth a line)
             ns = keep(allns, lambda n: (n.get("in_bed_min") or 0) >= 180, "in bed for under 3 hours")
