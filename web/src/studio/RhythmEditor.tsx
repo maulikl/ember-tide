@@ -68,7 +68,11 @@ export default function RhythmEditor() {
   for (let i = pts.length - 2; i >= 0; i--) pts[i].m = Math.min(pts[i].m, pts[i + 1].m);
   const x0 = Math.min(pts[0].m, hmToM(sch.window_start)) - 30, x1 = end + 30;
   const temps = [...pts.map(p => p.c), ...(showLast && last ? last.pts.map(p => p[1]) : [])];
-  const lo = Math.min(fToC(58), ...temps) - 0.6, hi = Math.max(fToC(82), ...temps) + 0.6;
+  const minC = Math.min(fToC(58), ...temps), maxC = Math.max(fToC(82), ...temps);
+  const gStep = u === "F" ? 4 : 2;
+  const gLo = u === "F" ? Math.floor((cToF(minC) - 1) / 4) * 4 : Math.floor((minC - 0.5) / 2) * 2;
+  const gHi = u === "F" ? Math.ceil((cToF(maxC) + 1) / 4) * 4 : Math.ceil((maxC + 0.5) / 2) * 2;
+  const lo = u === "F" ? fToC(gLo - 1.5) : gLo - 0.8, hi = u === "F" ? fToC(gHi + 1.5) : gHi + 0.8;
   const H = 340, L = 52, R = 18, T = 34, B = 54;
   const X = (m: number) => L + ((m - x0) / (x1 - x0)) * (w - L - R);
   const Y = (c: number) => T + (1 - (c - lo) / (hi - lo)) * (H - T - B);
@@ -84,7 +88,8 @@ export default function RhythmEditor() {
   const pathD = curve.map(([m, c], i) => `${i ? "L" : "M"}${X(m).toFixed(1)},${Y(c).toFixed(1)}`).join(" ");
   const areaD = `${pathD} L${X(end).toFixed(1)},${H - B} L${X(pts[0].m).toFixed(1)},${H - B} Z`;
   const ticks: number[] = []; for (let m = Math.ceil(x0 / 60) * 60; m <= x1; m += 60) ticks.push(m);
-  const gridF = u === "F" ? [56, 60, 64, 68, 72, 76, 80, 84, 88].filter(f => fToC(f) > lo && fToC(f) < hi).map(fToC) : [14, 16, 18, 20, 22, 24, 26, 28, 30].filter(c => c > lo && c < hi);
+  const gridF: number[] = [];
+  for (let v = gLo; v <= gHi; v += gStep) gridF.push(u === "F" ? fToC(v) : v);
   const lastPath = showLast && last ? last.pts.filter(p => p[0] >= x0 && p[0] <= x1).map(([m, c], i) => `${i ? "L" : "M"}${X(m).toFixed(1)},${Y(c).toFixed(1)}`).join(" ") : "";
 
   const setPhase = (i: number, patch: Partial<Phase>) => { const d = structuredClone(draft); d.phases[i] = { ...d.phases[i], ...patch }; setDraft(d); };

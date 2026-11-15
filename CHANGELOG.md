@@ -5,6 +5,17 @@ minor versions, and each entry says what to check when upgrading.
 
 ## Unreleased
 
+- **Away side reads clearly in Studio Overview.** When someone is marked away, Overview now says "Away · side stays off"
+  instead of "Not home yet · pre-condition waits".
+- **Plain note when a rhythm phase goes past Autopilot's limits.** Under Never below and Never above in Studio Autopilot
+  and phone Settings, a short note points out which phase runs colder or warmer and explains that Autopilot stops at the
+  limit while your rhythm still reaches it.
+- **Studio Autopilot opens on the latest night with data.** The night, Replay, and AI review now start on last night (or the
+  most recent night that ran) instead of an empty tonight before bed, with `‹` and `›` to step between nights.
+- **Every away night appears in "Nights that didn't count".** When someone is away for several days with no bed readings at
+  all on the middle nights, Autopilot now lists every night in that away stretch once as "you were away".
+- **Rhythm editor chart scales past every phase temperature.** The y-axis and gridlines now cover every phase with
+  headroom in both °F and °C instead of topping out at 84°F / 30°C.
 - **Insights you don't want can be put away.** Any card on Studio → Insights & Ask now has a "Not now" button that hides it across your devices until its wording or suggestion changes (or after 14 days for informational cards), with a "Show" link at the end of each group to peek at hidden cards, and the Ask panel can be tucked away with a "Hide" link.
 - **No "hasn't sent anything" card for a watch you replaced.** If one source of watch or ring readings stops but another
   still sends (for example after moving from Health Sync to Health Connect), Insights no longer says it has gone quiet.

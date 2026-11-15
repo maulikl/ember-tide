@@ -159,7 +159,7 @@ function Overview() {
             <div className="box" key={p.id}>
               <div className="row"><b style={{ fontWeight: 500, color: personaColor(p) }}>{p.name}{p.name.toLowerCase() !== p.zone ? ` · ${sideWord(p.zone).toLowerCase()}` : ""}</b>
                 <span className="num big" style={{ fontSize: 26 }}>{p.night.target_c == null ? "Off" : temp(p.night.target_c, u)}</span></div>
-              <div className="row mute" style={{ fontSize: 13 }}><span>{STATE_TEXT[p.night.state] ?? p.night.state}</span><span>{p.night.phase_name ?? ""}</span></div>
+              <div className="row mute" style={{ fontSize: 13 }}><span>{p.night.state === "away" && p.night.away ? "Away · side stays off" : (STATE_TEXT[p.night.state] ?? p.night.state)}</span><span>{p.night.phase_name ?? ""}</span></div>
               <div className="row" style={{ fontSize: 13 }}><span>Pad now {temp(p.bed.measured_c, u, 1)} · bed {p.bed.on ? `set to ${temp(p.bed.setpoint_c, u, 1)}` : "off"}</span></div>
               <div className="row" style={{ fontSize: 13 }}>
                 <span><span className="dot" aria-hidden="true" style={{ background: p.presence.present ? "var(--good)" : p.presence.present === false ? "var(--faint)" : "var(--warn)" }} />

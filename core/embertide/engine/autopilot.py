@@ -422,6 +422,28 @@ class Autopilot:
             ns = keep(ns, lambda n: (n.get("outage_min") or 0) < self.OUTAGE_MIN, "the bed or the server was off for a while")
             # mostly awake and moving (a fever, a bad night): not a normal night's sleep
             ns = keep(ns, lambda n: (n.get("awake_moving_share") or 0) < self.AWAKE_SHARE, "you were awake and moving for most of it")
+            # nights spent away that had no bed readings at all (so they never reached recent/allns above)
+            if gone or periods:
+                from datetime import datetime, timedelta
+                from .away import _night_span
+                from .rhythm import pick_rhythm, resolve
+                tz = self.c.clock.tz
+                today = datetime.fromtimestamp(now, tz)
+                d0 = (today - timedelta(days=1)).date() if today.hour < 12 else today.date()
+                seen = {x.get("date") for x in left if x.get("date")} | {n.get("date") for n in ns if n.get("date")}
+                for i in range(45):
+                    d = d0 - timedelta(days=i)
+                    ds = d.isoformat()
+                    if ds in seen:
+                        continue
+                    a, b = _night_span(d, tz)
+                    rh = pick_rhythm(p.rhythms, d)
+                    full_end = resolve(rh, d, tz).end if rh else b
+                    if now < full_end or (since and a < since):
+                        continue
+                    if ds in gone or away_share(periods, a, b) >= 0.5:
+                        left.append({"date": ds, "why": "you were away"})
+                        seen.add(ds)
             self.__dict__.setdefault("_left_cache", {})[p.id] = left
             cache[p.id] = (hour, ns)
         return cache[p.id][1]
