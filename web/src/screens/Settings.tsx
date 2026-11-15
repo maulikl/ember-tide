@@ -299,6 +299,7 @@ function AppVersion() {
   const [busy, setBusy] = useState(false);
   const [pct, setPct] = useState<number | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
 
   useEffect(() => {
     if (!isApp()) return;
@@ -310,6 +311,20 @@ function AppVersion() {
   const artifact = update?.android?.[appInfo.flavor];
   const newer = !!(update?.latest && update.version_code != null && update.version_code > appInfo.versionCode && artifact);
   const upToDate = !!(update?.version_code != null && update.version_code <= appInfo.versionCode);
+
+  // the server checks GitHub once a day; this asks it to look now (at most once a minute)
+  const checkNow = async () => {
+    if (checking) return;
+    setChecking(true);
+    setErr(null);
+    try {
+      setUpdate(await api.post<UpdateInfo>("/api/update/check"));
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setChecking(false);
+    }
+  };
 
   const install = async () => {
     if (!artifact || busy) return;
@@ -334,9 +349,12 @@ function AppVersion() {
           <button type="button" className="btn pri" disabled={busy} onClick={install}>
             {busy ? `Downloading… ${pct ?? 0}%` : `Update to ${update!.latest}`}
           </button>
-        ) : upToDate ? (
-          <span className="mute" style={{ fontSize: 13 }}>Up to date</span>
-        ) : null}
+        ) : (
+          <span style={{ textAlign: "right" }}>
+            {upToDate && <span className="mute" style={{ fontSize: 13, display: "block" }}>Up to date</span>}
+            <button type="button" className="link" disabled={checking} onClick={checkNow}>{checking ? "Checking…" : "Check now"}</button>
+          </span>
+        )}
       </div>
       {err && <p className="err" role="status" style={{ paddingBottom: 4 }}>{err}</p>}
     </div>

@@ -5,6 +5,9 @@ minor versions, and each entry says what to check when upgrading.
 
 ## Unreleased
 
+- **Check for an app update from the phone.** Settings, App version now has Check now: the server looks for a new
+  release straight away instead of waiting for its daily check.
+
 ## 0.1.15
 
 Update the server and the phone app together: the new Steps switch and the "Is that you in bed?" question need both.
