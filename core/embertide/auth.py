@@ -537,7 +537,9 @@ OWNER_ONLY = [
     re.compile(r"^/api/ai/settings"),                                    # the model address and key
     re.compile(r"^/api/hub(/|$)"),                                      # the control unit's detail (network name, address) and maintenance
     re.compile(r"^/api/dial-beacons$"),                                  # Studio's dial map; the phone app never reads it
-    re.compile(r"^/api/update/(settings|check)$"),                       # update check switch and manual check (GET /api/update is readable by any account)
+    re.compile(r"^/api/update/settings$"),                               # the update check switch (GET /api/update and the manual
+                                                                         # check, rate-limited to once a minute, are any account's:
+                                                                         # the phone's App version row has "Check now")
 ]
 # no sign-in, the address itself is the key: OAuth redirects (single-use state) and owner-made webhooks (secret URL)
 PUBLIC_PATTERNS = [("GET", re.compile(r"^/api/cloud/[a-z]{2,20}/callback$")), ("POST", re.compile(r"^/api/hooks/[A-Za-z0-9_]{2,20}/[A-Za-z0-9_\-]{16,64}$"))]
@@ -610,6 +612,8 @@ def authorize(p: Principal, method: str, path: str, partner_shares) -> str | Non
         return "This account can only look."
     if path == "/api/leak/clear":
         return None                                       # anyone who can use the bed can acknowledge a leak check
+    if path == "/api/update/check":
+        return None                                       # "Check now" on the phone's App version row (once a minute at most)
     if path == "/api/household/swap-sides":
         return None
     if re.match(r"^/api/care/[A-Za-z0-9_-]{1,40}/(done|snooze)$", path):
