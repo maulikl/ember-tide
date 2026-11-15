@@ -193,6 +193,10 @@ class NightEngine:
                 self._end_flash(now, source)         # "off" means off, even mid-flash
         elif action == "resume":
             self.s.skip, self.s.skip_next, self.s.pause_until = False, False, None
+            if self.s.started and self.s.state == "out_of_bed":
+                # off after the out-of-bed hold (or the bed lost whoever was there): carry on with the night now. If the
+                # side stays empty, the hold runs again and turns it off once more
+                self.s.absent_since = now
         elif action == "start_now":
             self.s.skip, self.s.started, self.s.in_bed = False, True, now
             self._began(now, "hand")
