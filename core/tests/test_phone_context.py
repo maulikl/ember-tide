@@ -219,3 +219,30 @@ def test_near_dial_holds_when_the_phone_goes_quiet_but_last_said_plugged_in():
     assert PC.bedside_side(st, PC.latest(st, "p1"), t + 4 * 3600) is None           # but not forever
     PC.update(st, "p1", {"charging": False}, t + 100 * 60)
     assert PC.bedside_side(st, PC.latest(st, "p1"), t + 101 * 60) is None           # unplugged when it did report
+
+
+def test_bedside_state_loose_sighting_expires_and_yields_to_newer_report(tmp_path, monkeypatch):
+    nogap(monkeypatch)
+    with make(tmp_path) as c:
+        k = ctl(c)
+        t0 = k.clock.now_ts()
+        k.clock.jump_to(t0)
+        assert post(c, charging=False, wifi_home=True, dials=[{"minor": 1, "rssi": -48}],
+                    sharing=["wifi", "charging", "dial"]).status_code == 200
+        # (a) not charging, strong own-dial scan 2 min ago, report carried the scan -> "in"
+        assert PC.bedside_state(k.store, PC.latest(k.store, "p1"), "left", t0 + 2 * 60) == "in"
+        # (b) same scan 8 min ago -> not "in" ("out" when on home Wi-Fi and not charging)
+        assert PC.bedside_state(k.store, PC.latest(k.store, "p1"), "left", t0 + 8 * 60) == "out"
+
+        # (c) strong scan 3 min ago, then a newer report without a scan (> SCAN_RECHECK_S later) -> "out"
+        # (3 min ago vs 2 min ago would only be a 60 s gap <= 90 s, so the follow-up report is 1 min ago, 120 s after)
+        k.clock.jump_to(t0 + 10 * 60)
+        assert post(c, charging=False, wifi_home=True, dials=[{"minor": 1, "rssi": -48}]).status_code == 200
+        k.clock.jump_to(t0 + 12 * 60)
+        assert post(c, charging=False, wifi_home=True).status_code == 200
+        assert PC.bedside_state(k.store, PC.latest(k.store, "p1"), "left", t0 + 13 * 60) == "out"
+
+        # (d) charging by the dial still -> "in" after 15 min (unchanged bedside_side() path)
+        k.clock.jump_to(t0 + 20 * 60)
+        assert post(c, charging=True, wifi_home=True, dials=[{"minor": 1, "rssi": -48}]).status_code == 200
+        assert PC.bedside_state(k.store, PC.latest(k.store, "p1"), "left", t0 + 35 * 60) == "in"
