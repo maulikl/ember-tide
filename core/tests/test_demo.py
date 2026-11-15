@@ -318,3 +318,34 @@ def test_seeded_demo_nights_start_and_finish(tmp_path: Path):
         assert sum(e["kind"] == "rhythm_started" for e in mine) >= 2, pid
         assert sum(e["kind"] == "night_done" for e in mine) >= 2, pid
         assert not any(e["kind"] == "pet_question" for e in mine), pid
+
+
+def test_seeded_demo_bed_follows_the_plan(tmp_path: Path):
+    """The seeded nights run in a few real seconds; the controller's real-time gap between automatic commands used to
+    drop nearly every plan change, so the bed sat at one setpoint all night, the demo's charts showed a 4-7 °F gap and
+    its suggestions said "the bed lags behind the plan"."""
+    import statistics
+    import time as _t
+
+    from embertide.demo import seed_demo_store
+    from embertide.store import Store
+
+    store = Store(tmp_path / "seed.db")
+    asyncio.run(seed_demo_store(store, "America/New_York", _t.time(), nights=2))
+    rows = store._db.execute("select zone, setpoint, target from telemetry where on_=1 and target is not null").fetchall()
+    for zone in ("left", "right"):
+        mine = [r for r in rows if r[0] == zone and r[1] is not None]
+        assert len({round(r[1], 1) for r in mine}) > 3, zone            # the setpoint moves through the night
+        assert statistics.median(abs(r[1] - r[2]) for r in mine) < 0.6, zone
+
+
+def test_seeding_leaves_the_command_gap_alone(tmp_path: Path):
+    import time as _t
+
+    import embertide.engine.controller as ctlmod
+    from embertide.demo import seed_demo_store
+    from embertide.store import Store
+
+    before = ctlmod.MIN_CMD_GAP_S
+    asyncio.run(seed_demo_store(Store(tmp_path / "seed.db"), "America/New_York", _t.time(), nights=1))
+    assert ctlmod.MIN_CMD_GAP_S == before
