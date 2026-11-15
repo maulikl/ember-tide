@@ -754,13 +754,17 @@ def build_studio_router(state) -> APIRouter:
 def wearable_cards(c, p, now: float) -> list[dict]:
     """Insight cards for a watch or ring that's new (being learned) or has gone quiet."""
     out = []
-    for d in c.autopilot.wearable_status(p, now):
+    devices = c.autopilot.wearable_status(p, now)
+    # another watch or ring of theirs is still sending (2026-11-15: an old "Health Sync" import had stopped, but the same
+    # watch now came through Health Connect): the quiet one was replaced, not lost, so "gone quiet" would be wrong
+    fresh = any(not d["quiet"] for d in devices)
+    for d in devices:
         if d["learning"]:
             out.append({"id": "wearable_learning", "severity": "info", "title": d["text"],
                         "detail": f"Different devices read a little differently. Until the {d['kind']} has a few nights, its "
                                   "readings only count against the rest of the same night, so nothing changes because of "
                                   "the switch.", "evidence": [], "proposal": None})
-        elif d["quiet"] and now - d["last"] <= 7 * 86400:
+        elif d["quiet"] and not fresh and now - d["last"] <= 7 * 86400:
             out.append({"id": "wearable_quiet", "severity": "info", "title": d["text"],
                         "detail": "Autopilot only uses fresh readings, so it carries on with the bed's own sensors.",
                         "evidence": [], "proposal": None})
