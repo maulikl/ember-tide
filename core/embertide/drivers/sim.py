@@ -270,7 +270,7 @@ class SimBed:
         other = self.z[oname]
         clock = (z.clock & 255, (z.clock >> 8) & 255, (z.clock >> 16) & 255, (z.clock >> 24) & 255)
         if z.occupied:
-            mins = (ts - (z.in_since or ts)) / 60
+            mins = max(0.0, (ts - (z.in_since or ts)) / 60)   # (the clock jumped back to before they got in: not negative)
             st = self.true_stage(name, ts) or "awake"
             base = 64 - min(8, mins / 10)
             hr_off, hr_jit, br_off, move = {"awake": (7, 2.5, 1.5, 0.25), "light": (0, 1.2, 0, 0.04),
