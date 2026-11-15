@@ -436,12 +436,21 @@ def _summarize(store: Store, person: Person, d: date, tz: ZoneInfo, now: float, 
     return out
 
 
-def recent(store: Store, person: Person, tz: ZoneInfo, now: float, count: int = 7) -> list[dict]:
+def recent(store: Store, person: Person, tz: ZoneInfo, now: float, count: int = 7, hide_away: bool = True) -> list[dict]:
+    """The last `count` nights. A night that mostly fell while the person was marked away isn't theirs (a pet, a guest
+    lay there): it comes back as a plain "away" marker with no numbers, the same as the Sleep screen shows, so
+    insights, the tuning guide and the assistant never learn from it (2026-11-15: a dog's nights on an away partner's
+    side turned into "settling takes 158 minutes" and "you get into bed 162 min late"). Autopilot passes
+    hide_away=False: it leaves those nights out itself and lists them as "you were away"."""
     today = datetime.fromtimestamp(now, tz)
     d0 = (today - timedelta(days=1)).date() if today.hour < 12 else today.date()
     out = []
+    if hide_away:
+        from .away import hide_away_night
     for i in range(count):
         s = summarize(store, person, d0 - timedelta(days=i), tz, now)
-        if s and (s.get("has_data") or i == 0):
+        if s and hide_away:
+            s = hide_away_night(store, person.id, s, now, tz)
+        if s and (s.get("has_data") or s.get("away") or i == 0):     # an away marker stays (the Sleep week shows it)
             out.append(s)
     return out
