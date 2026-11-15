@@ -164,12 +164,22 @@ export default function Tonight({ setSimpleOn }: { setSimpleOn: (v: boolean) => 
   const night = !!(me && snap && me.settings.simple_at_night && isNight(me, snap));
   const v: View = view ?? me?.settings.default_view ?? "me";
   useEffect(() => { if (night && simple === null) setSimple(true); }, [night, simple]);
+  // "Night screen by default" is followed when it changes (or arrives after this screen opened), not only on first
+  // load. Turning it off only closes a night screen the setting opened, never one you opened yourself or one that's
+  // open because it's night.
+  const simpleDefault = me?.settings.simple_default;
+  const byDefault = useRef(!!simpleDefault);
+  useEffect(() => {
+    if (simpleDefault === undefined) return;
+    if (simpleDefault && simple === null) { byDefault.current = true; setSimple(true); }
+    else if (!simpleDefault && byDefault.current) { byDefault.current = false; if (simple === true && !night) setSimple(null); }
+  }, [simpleDefault, simple, night]);
   const isSimple = simple === true;
   useEffect(() => { setSimpleOn(isSimple); return () => setSimpleOn(false); }, [isSimple, setSimpleOn]);
 
   if (!snap || !me) return null;
   const u = me.settings.units;
-  if (isSimple) return <Simple person={me} partner={partner} night={night} onExit={() => setSimple(false)} />;
+  if (isSimple) return <Simple person={me} partner={partner} night={night} onExit={() => { byDefault.current = false; setSimple(false); }} />;
 
   const focus: PersonView = v === "partner" && partner ? partner : me;
   const target: PersonView = v === "both" ? (snap.people.find(p => p.id === acting) ?? me) : focus;
@@ -256,7 +266,7 @@ export default function Tonight({ setSimpleOn }: { setSimpleOn: (v: boolean) => 
       <div className="tn-upper" ref={upperRef}>
       <div className="top">
         <span className="num"><span className="dot" style={{ background: !connected ? "var(--faint)" : snap.system.online ? "var(--good)" : "var(--bad)" }} />{clock(snap.now, snap.tz)}{snap.speed !== 1 && snap.system.driver === "sim" ? ` · sim ×${snap.speed}` : ""}</span>
-        <button className="icon-btn" aria-label="Night screen: just the temperature and flashes" onClick={() => setSimple(true)}>Night screen</button>
+        <button className="icon-btn" aria-label="Night screen: just the temperature and flashes" onClick={() => { byDefault.current = false; setSimple(true); }}>Night screen</button>
       </div>
       <LeakBanner />
       <div className="seg" role="group" aria-label="Whose night" data-cycle="v">
