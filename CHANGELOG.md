@@ -7,6 +7,8 @@ minor versions, and each entry says what to check when upgrading.
 
 - **No "hasn't sent anything" card for a watch you replaced.** If one source of watch or ring readings stops but another
   still sends (for example after moving from Health Sync to Health Connect), Insights no longer says it has gone quiet.
+- **Check for an app update from the phone.** Settings, App version now has Check now: the server looks for a new
+  release straight away instead of waiting for its daily check.
 
 ## 0.1.15
 

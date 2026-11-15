@@ -227,7 +227,7 @@ def test_demo_never_checks_and_blocks_write_routes(tmp_path, monkeypatch):
     assert c.portal.call(updates.check_once, st.cfg, st.controller.store) is None
 
 
-def test_owner_only_and_sleeper_can_read(tmp_path, monkeypatch):
+def test_owner_switches_it_off_and_anyone_can_read_and_check(tmp_path, monkeypatch):
     c = make(tmp_path)
     mock_http(monkeypatch, lambda req: httpx.Response(200, json=valid_manifest()))
 
@@ -240,7 +240,9 @@ def test_owner_only_and_sleeper_can_read(tmp_path, monkeypatch):
 
     assert sleeper.get("/api/update").status_code == 200
     assert sleeper.put("/api/update/settings", json={"enabled": False}, headers=H).status_code == 403
-    assert sleeper.post("/api/update/check", headers=H).status_code == 403
+    # anyone signed in may check now (the phone's App version row), at most once a minute; only the owner switches it off
+    monkeypatch.setattr(updates, "MANUAL_COOLDOWN_S", 0)
+    assert sleeper.post("/api/update/check", headers=H).status_code == 200
 
     assert c.put("/api/update/settings", json={"enabled": True}, headers=H).status_code == 200
     assert c.post("/api/update/check", headers=H).status_code == 200
