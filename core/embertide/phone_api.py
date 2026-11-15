@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from .engine import phone_context as PC
 
-SOURCES = ("location", "wifi", "calendar", "alarm", "charging", "watch", "dial", "watch_hr")
+SOURCES = ("location", "wifi", "calendar", "alarm", "charging", "watch", "dial", "watch_hr", "steps")
 MIN_GAP_S = 5            # per person: the app reports on changes and a slow heartbeat; anything faster is a bug
 
 
@@ -43,11 +43,13 @@ class PhoneContextBody(BaseModel):
     bedtime_mode: bool | None = None
     watch_connected: bool | None = None
     dials: list[DialSighting] | None = Field(None, max_length=8)      # bedside dials heard (strongest first)
+    steps_total: float | None = Field(None, ge=0, le=1e9)             # cumulative steps since boot
+    steps_at: float | None = None                                     # wall-clock unix seconds of the step reading
     device: str | None = Field(None, max_length=60)
     sharing: list[str] | None = Field(None, max_length=12)          # which switches are on in the app
     ts: float | None = None                                           # phone's clock, for information only
 
-    @field_validator("distance_km", "eta_min", "next_alarm", "evening_event_end", "early_start", "ts")
+    @field_validator("distance_km", "eta_min", "next_alarm", "evening_event_end", "early_start", "ts", "steps_total", "steps_at")
     @classmethod
     def _finite(cls, v):
         if v is not None and not math.isfinite(v):

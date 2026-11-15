@@ -443,7 +443,14 @@ class NightEngine:
         elif away:
             state, base = "away", None
         elif self.s.started:
-            if self.s.absent_since and now - self.s.absent_since > sched.absent_hold_min * 60:
+            if self.s.absent_since and now - self.s.absent_since > sched.absent_hold_min * 60 and self._short_start(now, n, sched):
+                # up soon after the night started (a pet that started it, a short rest in the evening), still inside the
+                # bedtime window: keep the side ready for bed at the getting-in temperature instead of turning it off.
+                # Coming back follows the usual rules (back within the hour resumes, later starts afresh)
+                state = "out_of_bed_hold"
+                base, _ = target_at(n, self.s.in_bed + 1)           # what getting in feels like ("Fall asleep")
+                phase = None              # no part of the night is running: a change made now is for the night ahead
+            elif self.s.absent_since and now - self.s.absent_since > sched.absent_hold_min * 60:
                 state, base = "out_of_bed", None
             else:
                 base, ph = target_at(n, min(now, n.end - 1))     # past the end (lying in): the wake phase carries on
@@ -551,6 +558,23 @@ class NightEngine:
             return False
         left = s.out_since if s.out_since is not None else s.absent_since
         stayed = left - s.in_bed                      # from the night's start until they got up, short trips included
+        return stayed < self.REANCHOR_IN_BED_S or (left < n.bedtime and stayed < self.REANCHOR_EVENING_IN_BED_S)
+
+    def _short_start(self, now: float, n: ResolvedNight, sched) -> bool:
+        """The side is empty and the night had only just started when they got up (the same short stays as
+        _given_up_early), still inside the bedtime window and not in the last hours before wake (2026-11-15: a dog
+        started the night at 00:01, moved to the other side at 00:22, and the side went off at 00:53 instead of staying
+        ready for bed)."""
+        s = self.s
+        if not (s.started and not s.ended and s.started_by == "presence" and sched.start_on_presence and s.in_bed is not None
+                and s.absent_since is not None) or getattr(self, "away", False):
+            return False
+        if now >= n.window_end or now >= n.wake - self.REANCHOR_BEFORE_WAKE_S:
+            return False
+        if now < n.bedtime - sched.precool_lead_min * 60:
+            return False                                 # not yet the time the side gets ready on a normal evening
+        left = s.out_since if s.out_since is not None else s.absent_since
+        stayed = left - s.in_bed
         return stayed < self.REANCHOR_IN_BED_S or (left < n.bedtime and stayed < self.REANCHOR_EVENING_IN_BED_S)
 
     def _start_again(self, now: float) -> None:
