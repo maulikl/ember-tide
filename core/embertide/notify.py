@@ -43,7 +43,7 @@ LEFT_ON_AFTER_S = 20 * 60     # on by hand, nobody in it this long → ask to tu
 # and all capped kinds together per person per day. EXEMPT: things the person asked for themselves.
 IGNORED_AFTER_S = 20 * 60          # a side ignoring commands this long gets a "not taking changes" alert
 TICK_FAIL_AFTER = 120              # a person's update failing this many ticks in a row (~2 min) gets a "not updating" alert
-CAPS = {"morning": 1, "digest": 1, "pet_question": 1, "away_precool": 1, "empty_side": 1, "not_started": 1, "left_on": 2, "problem": 3, "hub": 3, "leak": 5, "maintenance": 1,
+CAPS = {"morning": 1, "digest": 1, "pet_question": 1, "pet_live": 1, "away_precool": 1, "empty_side": 1, "not_started": 1, "left_on": 2, "problem": 3, "hub": 3, "leak": 5, "maintenance": 1,
         "account": 1, "reach": 2, "bridge": 1, "storage": 1, "wearable": 1, "bed_silent": 1, "sensor": 3, "target": 2, "review": 1}
 DAILY_MAX = 4
 DEDUP_S = 6 * 3600            # the same message (person, kind, title) again within this is dropped
@@ -53,7 +53,7 @@ EXEMPT = {"test", "action_done"}
 AWAKE_KINDS = {"away_precool", "empty_side", "left_on"}
 # not_started follows its own time rule instead (see _observe_person): any time except the last hour before wake. Quiet hours
 # don't hold it: it's about getting into bed, and holding it for the morning summary would make it useless
-OWN_TIMING_KINDS = {"not_started", "maintenance", "account", "reach", "bridge", "storage", "wearable", "sensor"}    # maintenance and the "fix this when you can" kinds: _care() / _gaps() keep to daytime and out of anyone's night themselves
+OWN_TIMING_KINDS = {"not_started", "pet_live", "maintenance", "account", "reach", "bridge", "storage", "wearable", "sensor"}    # maintenance and the "fix this when you can" kinds: _care() / _gaps() keep to daytime and out of anyone's night themselves; pet_live goes at once at any hour
 NOT_STARTED_QUIET_BEFORE_WAKE_S = 3600
 # maintenance reminders (care.py): only in the day, local time, 9 AM up to (not including) 7 PM
 CARE_FROM_HOUR, CARE_TO_HOUR = 9, 19
@@ -140,7 +140,7 @@ class Action:
 
 # Where a tap on a notification goes when the message doesn't name a page itself (phone screens; Studio only where a
 # message asks for it). The front page is Tonight, where the pet and away questions are answered.
-DEFAULT_LINKS = {"review": "/", "morning": "/sleep", "digest": "/sleep", "pet_question": "/", "away_check": "/", "maintenance": "/settings#care",
+DEFAULT_LINKS = {"review": "/", "morning": "/sleep", "digest": "/sleep", "pet_question": "/", "pet_live": "/", "away_check": "/", "maintenance": "/settings#care",
                  "hub": "/settings#hub", "leak": "/", "problem": "/", "wearable": "/settings#watch", "account": "/settings"}
 # What a Studio page is for someone without an owner account (Studio's owner tools aren't theirs)
 PHONE_FOR_STUDIO = {"/studio/hub": "/settings#hub", "/studio/devices": "/", "/studio/notifications": "/settings",
@@ -1068,28 +1068,42 @@ class Notifier:
 
     def _pet_question(self, person, now: float) -> Message | None:
         """"Was the pet on the bed?" as a push, once per question, only between 8 AM and 9 PM (a question from the night
-        waits for the morning summary, which asks it; it is also on Tonight and in Studio)."""
+        waits for the morning summary, which asks it; it is also on Tonight and in Studio). A 'live' question asks right
+        away at any hour."""
         if not (person.settings.pet_questions and person.settings.notify.pet_question):
             return None
         from .engine.away import is_away
         if is_away(self.store, person.id, now):
             return None                                   # marked away: whatever lay on their side wasn't their night
-        if not 8 <= datetime.fromtimestamp(now, self.c.clock.tz).hour < 21:
-            return None
-        if (self.__dict__.get("_pq_checked") or {}).get(person.id, 0) > now - 60:
-            return None                                   # looked a minute ago
-        self.__dict__.setdefault("_pq_checked", {})[person.id] = now
-        if self._morning_pending(person, now):
-            return None                                   # the morning summary will ask it: one ping, not two
         from .engine import petq
         q = petq.open_for(self.store, person.id, now)
-        if not q or not self._once(f"petq:{q['id']}"):
+        if not q:
             return None
-        t, b = self._say("pet_question", self._pet_slots(q), person, now)
+        live = q.get("kind") == "live"
+        if not live:
+            if not 8 <= datetime.fromtimestamp(now, self.c.clock.tz).hour < 21:
+                return None
+            if (self.__dict__.get("_pq_checked") or {}).get(person.id, 0) > now - 60:
+                return None                               # looked a minute ago
+            self.__dict__.setdefault("_pq_checked", {})[person.id] = now
+            if self._morning_pending(person, now):
+                return None                               # the morning summary will ask it: one ping, not two
+        if not self._once(f"petq:{q['id']}"):
+            return None
+        v = petq.view(q, self.c.household, self.c.clock.tz, self._pet_clock(q))
+        if live:
+            t, b = self._say("pet_live", {"who": v["who"], "sign": petq.live_sign(q)}, person, now)
+            acts = []
+            if len(q["pets"]) == 1:
+                yes = next((c for c in v["choices"] if c["answer"] == "yes"), None)
+                if yes is None:
+                    return None        # the pet was deleted after this question was created
+                acts = [Action(yes["label"][:40], "pet_yes", ref=q["id"]), Action("It's me", "pet_me", ref=q["id"])]
+            return Message("pet_live", t, b, person.id, actions=acts, priority=4, urgent=True, tags=["dog"])
+        t, b = self._say("pet_question", {"who": v["who"], "when": v["when"]}, person, now)
         # answer right from the notification (one pet: "Yes, it was Rex"; with several, which one is picked in the app)
         acts = []
         if len(q["pets"]) == 1:
-            v = petq.view(q, self.c.household, self.c.clock.tz, self._pet_clock(q))
             yes = next((c for c in v["choices"] if c["answer"] == "yes"), None)
             if yes is None:
                 return None        # the pet was deleted after this question was created

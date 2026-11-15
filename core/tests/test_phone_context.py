@@ -245,3 +245,58 @@ def test_a_phone_picked_up_after_a_bedside_scan_stops_vouching_but_doesnt_say_up
         k.clock.jump_to(t0 + 30 * 60)
         assert post(c, charging=True, wifi_home=True, dials=[{"minor": 1, "rssi": -48}]).status_code == 200
         assert st(t0 + 45 * 60) == "in"
+
+
+def test_steps_since_baseline_reboot_and_staleness(tmp_path, monkeypatch):
+    nogap(monkeypatch)
+    with make(tmp_path) as c:
+        k = ctl(c)
+        t = k.clock.now_ts()
+        assert post(c, steps_total=-1, steps_at=t).status_code == 422
+        assert post(c, steps_total=2e9, steps_at=t).status_code == 422
+
+        # Readings strictly before t (walking to bed) never count
+        assert post(c, steps_total=500, steps_at=t - 600, sharing=["steps"]).status_code == 200
+        assert post(c, steps_total=700, steps_at=t - 60, sharing=["steps"]).status_code == 200
+        assert PC.steps_since(PC.latest(k.store, "p1"), t, t) is None
+
+        # First reading at or after t sets the baseline; fewer than two -> None
+        post(c, steps_total=710, steps_at=t + 30, sharing=["steps"])
+        assert PC.steps_since(PC.latest(k.store, "p1"), t, t + 60) is None
+
+        # Second reading after t counts only steps since that baseline
+        post(c, steps_total=760, steps_at=t + 300, sharing=["steps"])
+        assert PC.steps_since(PC.latest(k.store, "p1"), t, t + 330) == 50
+
+        # Stale latest reading -> None
+        assert PC.steps_since(PC.latest(k.store, "p1"), t, t + 300 + PC.PHONE_FRESH_S + 1) is None
+
+        # Phone reboot (total goes down) starts history afresh
+        post(c, steps_total=15, steps_at=t + 600, sharing=["steps"])
+        assert PC.steps_since(PC.latest(k.store, "p1"), t, t + 610) is None
+        post(c, steps_total=60, steps_at=t + 900, sharing=["steps"])
+        assert PC.steps_since(PC.latest(k.store, "p1"), t, t + 910) == 45
+
+        # History keeps at most the last 12 readings
+        for i in range(15):
+            post(c, steps_total=100 + i * 10, steps_at=t + 1000 + i * 60, sharing=["steps"])
+        assert len(PC.latest(k.store, "p1")["steps_hist"]) == 12
+
+
+def test_steps_switch_off_drops_data_and_history(tmp_path, monkeypatch):
+    nogap(monkeypatch)
+    with make(tmp_path) as c:
+        k = ctl(c)
+        t = k.clock.now_ts()
+        post(c, steps_total=100, steps_at=t, sharing=["steps", "alarm"])
+        post(c, steps_total=160, steps_at=t + 300, sharing=["steps", "alarm"])
+        cur = PC.latest(k.store, "p1")
+        assert PC.steps_since(cur, t, t + 310) == 60
+        assert "steps_total" in cur["data"] and cur.get("steps_hist")
+
+        post(c, sharing=["alarm"])                                  # steps switched off
+        cur = PC.latest(k.store, "p1")
+        assert "steps_total" not in cur["data"] and "steps_at" not in cur["data"]
+        assert "steps_total" not in cur["ts"] and "steps_at" not in cur["ts"]
+        assert not cur.get("steps_hist")
+        assert PC.steps_since(cur, t, t + 310) is None

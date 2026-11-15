@@ -14,11 +14,17 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.location.Location
 import android.location.LocationManager
 import android.net.wifi.WifiManager
 import android.os.BatteryManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.provider.CalendarContract
 import androidx.core.content.ContextCompat
 import androidx.work.Constraints
@@ -58,12 +64,13 @@ import kotlin.math.min
  *   charging  on the charger / bedtime mode (Do Not Disturb)
  *   watch     the watch connected to this phone
  *   dial      a bedside dial heard over Bluetooth at night (phone lying by the bed)
+ *   steps     cumulative steps since boot (hardware step counter)
  * Collected by a WorkManager job every 15 min (more often while away in the evening), and when the alarm changes.
  * Sent to POST /api/people/{pid}/phone-context. No wake locks; the dial scan runs a few seconds and only at night
  * while the phone is charging or in bedtime mode.
  */
 object PhoneSources {
-    val ALL = listOf("location", "wifi", "calendar", "alarm", "charging", "watch", "dial", "watch_hr")
+    val ALL = listOf("location", "wifi", "calendar", "alarm", "charging", "watch", "dial", "watch_hr", "steps")
     private const val PREFS = "ember_phone"
     private const val WORK = "phone-context"
     val DIAL_UUID: UUID = UUID.fromString("7c1f0e2a-5d3b-4e8a-9b6c-ed0a11e1de00")
@@ -87,6 +94,7 @@ object PhoneSources {
         "calendar" -> listOf(Manifest.permission.READ_CALENDAR)
         "dial" -> if (Build.VERSION.SDK_INT >= 31) listOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.ACCESS_FINE_LOCATION)
                   else listOf(Manifest.permission.ACCESS_FINE_LOCATION)
+        "steps" -> if (Build.VERSION.SDK_INT >= 29) listOf(Manifest.permission.ACTIVITY_RECOGNITION) else emptyList()
         else -> emptyList()
     }
     fun needsBackground(src: String) = src in listOf("location", "wifi", "dial")
@@ -123,7 +131,7 @@ object PhoneSources {
         val pi = android.app.PendingIntent.getBroadcast(c, 41, Intent(c, NightAlarmReceiver::class.java),
             android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT)
         val on = enabled(c)
-        if ("dial" !in on && "charging" !in on && "watch_hr" !in on) { am.cancel(pi); return }
+        if ("dial" !in on && "charging" !in on && "watch_hr" !in on && "steps" !in on) { am.cancel(pi); return }
         val mins = PlugPolicy.nextCheckMinutes(Calendar.getInstance().get(Calendar.HOUR_OF_DAY), watchesPlug(c))
         val next = if (mins != null) System.currentTimeMillis() + mins * 60_000L else Calendar.getInstance().apply {
             if (get(Calendar.HOUR_OF_DAY) >= 19) add(Calendar.DAY_OF_YEAR, 1)
@@ -307,9 +315,39 @@ object PhoneSources {
         if ("dial" in on && (charging || bedtime || screenOff) && (nightWindow() || fakeDials(c) != null)) {
             out.put("dials", validDials(scanDials(c)))
         }
+        if ("steps" in on && (Build.VERSION.SDK_INT < 29 || has(c, Manifest.permission.ACTIVITY_RECOGNITION))) {
+            readSteps(c)?.let { steps ->
+                out.put("steps_total", steps.toDouble())
+                out.put("steps_at", System.currentTimeMillis() / 1000.0)
+            }
+        }
         out.put("sharing", JSONArray(on.toList()))
         out.put("device", Build.MODEL.take(60))
         return out
+    }
+
+    /** Read the hardware step counter once (cumulative steps since boot). Returns null when the phone has no
+     *  step counter or it doesn't deliver a reading within 3 s; never holds a wake lock. */
+    private suspend fun readSteps(c: Context): Float? {
+        val sm = c.getSystemService(SensorManager::class.java) ?: return null
+        val sensor = sm.getDefaultSensor(Sensor.TYPE_STEP_COUNTER) ?: return null
+        return withTimeoutOrNull(3_000) {
+            suspendCancellableCoroutine { cont ->
+                val listener = object : SensorEventListener {
+                    override fun onSensorChanged(event: SensorEvent) {
+                        sm.unregisterListener(this)
+                        val v = event.values.firstOrNull()
+                        if (cont.isActive) cont.resume(if (v != null && v.isFinite() && v >= 0f) v else null)
+                    }
+                    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+                }
+                cont.invokeOnCancellation { sm.unregisterListener(listener) }
+                if (!sm.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_NORMAL, Handler(Looper.getMainLooper()))) {
+                    sm.unregisterListener(listener)
+                    if (cont.isActive) cont.resume(null)
+                }
+            }
+        }
     }
 
     fun nightWindow(): Boolean { val h = Calendar.getInstance().get(Calendar.HOUR_OF_DAY); return h >= 19 || h < 11 }

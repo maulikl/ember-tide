@@ -450,6 +450,31 @@ def test_historical_event_lookups_and_until_bounds(tmp_path):
     assert active_windows(evs, "left", 200) == [(100, 200)]
 
 
+def test_a_false_start_keeps_the_side_ready_for_bed_instead_of_going_off():
+    # 2026-11-15: a dog started the night at 00:01, moved to the other side at 00:22, and the side went off at 00:53
+    # (after the out-of-bed hold); the owner got in at 01:02 to a cold side
+    e = NightEngine(person(), TZ)
+    t = ts("2026-11-05T22:40")
+    e.tick(t, True)
+    e.tick(t + 200, True)
+    assert e.s.started
+    e.tick(t + 25 * 60, False)                               # up after ~25 min
+    v = e.tick(t + 25 * 60 + 31 * 60, False)                 # past the 30 min hold
+    assert e.s.started and e.s.state == "out_of_bed_hold" and v is not None
+    assert v == pytest.approx(target_at(e.night, e.s.in_bed + 1)[0], abs=0.05)   # held at the getting-in temperature
+    v = e.tick(t + 25 * 60 + 50 * 60, False)                 # still ready 50 min later
+    assert v is not None and e.s.state == "out_of_bed_hold"
+
+
+def test_a_night_under_way_still_goes_off_when_the_side_stays_empty():
+    e = NightEngine(person(), TZ)
+    t = ts("2026-11-05T23:10")
+    e.tick(t, True)
+    e.tick(t + 200, True)
+    e.tick(t + 2 * 3600, False)                              # up after two hours
+    assert e.tick(t + 2 * 3600 + 31 * 60, False) is None and e.s.state == "out_of_bed" and e.s.started
+
+
 def test_resume_after_the_out_of_bed_hold_turns_the_side_back_on():
     # 2026-11-15: the side went off after the out-of-bed hold (the bed lost the dog lying there) and "Turn on" was
     # cancelled at once as "rhythm start passed" (a by-hand temperature never keeps an empty side on: see

@@ -9,6 +9,8 @@ Everything below is optional except the app itself; the phone web app at your se
 ## Download the app
 
 Each release has its apps on the repository's **Releases** page, signed with the project's release key:
+**[download the latest release](https://github.com/Ncbudd/ember-tide/releases/latest)** (the files are under **Assets** at the
+bottom of the release).
 
 | File | Pick it if |
 |---|---|
@@ -49,6 +51,12 @@ installs new APKs for you, with no app store.
    (for the watch app, `wear-os`). Without the filter Obtainium asks which file to use each time.
 4. Tap **Add**. Obtainium checks for new releases in the background and offers each one as an update; Android installs it
    only because it's signed with the same key as the app you have.
+
+**"Rate limited" in Obtainium?** That message comes from GitHub, not from Ember & Tide: GitHub lets an app check releases
+without signing in about 60 times an hour per internet connection, shared by every app on it. Wait an hour and tap **Check for
+updates** again, or add a GitHub token in Obtainium (**Settings**, **GitHub**: a personal access token with no permissions
+ticked is enough), which raises the limit a lot. In the meantime you can always download the APK from the
+[latest release](https://github.com/Ncbudd/ember-tide/releases/latest) and install it by hand.
 
 Obtainium only tracks full releases, not test builds. Update the server too when a new release comes out: the app and the
 server are meant to run the same version.

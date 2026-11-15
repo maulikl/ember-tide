@@ -192,6 +192,7 @@ class Controller:
                     ep["pet_id"] = hit.id
             if pg.get("with_person"):
                 ep["with_person"] = True
+        self._who_check(zone, pg, ep, self.clock.now_ts())
         # what the radar zones on this side said, before a pet guard zeroes them (_episode's "radar saw nobody" count)
         self.__dict__.setdefault("_radar_raw", {})[zone] = [v for k, _, v in votes if k.startswith("presence:") and v is not None]
         if pg and pg["suspected"]:
@@ -537,6 +538,80 @@ class Controller:
             self.store.event(now, "pet_cleared", None, "pets", zone=zone)
         on[zone] = active
         return pg
+
+    CONFLICT_HOLD_S = 180
+    CONFLICT_AFTER_START_S = 60 * 60
+    STEPS_UP = 40
+
+    def _who_check(self, zone: str, pg: dict | None, ep: dict | None, now: float) -> dict | None:
+        """Ask right away ("Is that you in bed, or <pet>?") when the side looks occupied and the watch or phone steps disagree."""
+        from . import away, petq, phone_context
+
+        since_map = self.__dict__.setdefault("_who_since", {})
+        p = next((x for x in self.household.people if x.zone == zone), None)
+        if (p is None or zone in self.household.guest or away.is_away(self.store, p.id, now)
+                or not petq.fitting_pets(self.household, zone) or not getattr(p.settings, "pet_questions", True)
+                or self.presence.present(zone) is not True or self.active_since is not None
+                or ep is None
+                or (pg and (pg.get("suspected") or pg.get("with_person")))
+                or (ep.get("ident") or {}).get("state") == "me" or ep.get("me_seen")):
+            since_map.pop(zone, None)
+            return None
+        e = self.engines.get(p.id)
+        running = bool(e and e.s.started and e.s.state not in ("done", "day"))
+        if running and e.s.in_bed is not None and now - e.s.in_bed > self.CONFLICT_AFTER_START_S:
+            since_map.pop(zone, None)
+            return None                                  # well into the night: the morning questions take over
+        if not running:
+            # only around bedtime (from half an hour before the evening's pre-cool until the night ends): by day the
+            # usual "was the pet on the bed?" question covers it, and a daytime ask would use up the night's one question
+            try:
+                n = e.projected(now) if e else None
+            except Exception:  # noqa: BLE001
+                n = None
+            if not (n and n.precool - 1800 <= now <= n.end):
+                since_map.pop(zone, None)
+                return None
+        grp = petq._group(now, self.clock.tz)
+        if self.store.get(f"who_asked:{p.id}") == grp:
+            since_map.pop(zone, None)
+            return None
+        if (zone, round(ep["since"])) in self.__dict__.get("_who_me", {}):
+            since_map.pop(zone, None)
+            return None
+        steps = phone_context.steps_since(phone_context.latest(self.store, p.id), ep["since"], now)
+        if steps is not None and steps >= self.STEPS_UP:
+            since_map.pop(zone, None)
+            return petq.ask_live(self, zone, ep, now, "steps", steps=steps)
+        if ep.get("not_me"):
+            since = since_map.setdefault(zone, now)
+            if now - since < self.CONFLICT_HOLD_S:
+                return None
+            since_map.pop(zone, None)
+            return petq.ask_live(self, zone, ep, now, "watch")
+        since_map.pop(zone, None)
+        return None
+
+    def who_confirmed_pet(self, zone: str, pet_id: str | None, span_start: float, now: float) -> None:
+        """The owner said "It's <pet>" to a live question: mark this side as the pet until empty, and undo a fresh start."""
+        from .pets import PetGuard
+
+        pet = next((x for x in self.household.pets if x.id == pet_id), None)
+        pet_name = pet.name if pet else (pet_id or "pet")
+        guard = self.__dict__.setdefault("_pets", PetGuard())
+        st = guard.state.setdefault(zone, {"scale_person": False, "base": None, "high_since": None, "occ_since": None,
+                                           "pet_since": None, "with_since": None, "hist": []})
+        st["confirmed"] = pet_name
+        p = next((x for x in self.household.people if x.zone == zone), None)
+        undid = False
+        if p is not None:
+            e = self.engines.get(p.id)
+            if (e and e.s.started and e.s.in_bed is not None and e.s.in_bed >= span_start - 120
+                    and e.s.state in ("waiting", "rhythm", "out_of_bed_hold", "out_of_bed")):
+                e._end_flash(now, "pet")
+                e.s.started, e.s.in_bed, e.s.reanchor = False, None, None
+                undid = True
+        self.store.event(now, "who_answer", p.id if p else None, "app", zone=zone, pet=pet_id, undid_start=undid)
 
     # ---------- loop ----------
     async def start(self) -> None:

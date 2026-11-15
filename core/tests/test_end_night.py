@@ -172,10 +172,10 @@ async def test_manual_adjust_in_inactive_states_never_keeps_bed_on(tmp_path):
 
     n = Night(tmp_path, "2026-11-05T22:20")
     n.present("left", True)
-    await n.until("2026-11-05T23:00")
+    await n.until("2026-11-05T23:10")                       # in bed long enough that it's a night under way
     e = n.e(n.p1)
     n.present("left", False)
-    await n.until("2026-11-05T23:35")
+    await n.until("2026-11-05T23:45")
     assert e.s.state == "out_of_bed" and e.s.target_c is None
     e.adjust(n.clock.now_ts(), temp_c=28.0)
     await n.step(2)
@@ -237,13 +237,13 @@ async def test_flash_ends_on_out_of_bed_done_and_away(tmp_path):
 
     n = Night(tmp_path / "oob", "2026-11-05T22:20")
     n.present("left", True)
-    await n.until("2026-11-05T23:00")
+    await n.until("2026-11-05T23:10")                       # in bed long enough that it's a night under way
     e = n.e(n.p1)
     e.flash("hot", n.clock.now_ts(), minutes=60)
     await n.step(2)
     assert e.s.flash is not None and e.s.target_c is not None
     n.present("left", False)
-    await n.until("2026-11-05T23:35")
+    await n.until("2026-11-05T23:45")
     assert e.s.state == "out_of_bed" and e.s.flash is None and e.s.target_c is None and not n.side("left").on
 
     n2 = Night(tmp_path / "done", "2026-11-05T22:20")

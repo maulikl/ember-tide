@@ -15,7 +15,7 @@ SAMPLE = {"name": "Alex", "minutes": 23, "summary": "7 h 50 min in bed · settle
           "n": 3, "look": 7, "step": "1 °F", "detail": "no answer", "lines": "2:06 AM: Can't reach the bed.",
           "what": "Fan speed out of range", "advice": "Check the hub's vents aren't blocked.",
           "why": "Keeps the water clean.", "more": " 2 other jobs are due too.", "day": "Thursday", "service": "Oura", "hours": 3, "free": "600 MB",
-          "device": "Pixel Watch", "now": "74°", "want": "68°"}
+          "device": "Pixel Watch", "now": "74°", "want": "68°", "sign": "Your phone counted 52 steps since then"}
 
 
 class P:
