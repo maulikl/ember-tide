@@ -169,7 +169,9 @@ def test_guide_suggestion_dismissal_is_remembered_until_it_changes(tmp_path, mon
         assert get()["dismissed"] is True
         shown["to"] = "23:30"                                    # the pattern moved: it comes back
         assert not get().get("dismissed")
-        assert c.post("/api/people/p1/insights/dismiss", json={"id": "other", "sig": "x"}).status_code == 422
+        # any card can be put away now (not only tuning-guide ones); a malformed id is still refused
+        assert c.post("/api/people/p1/insights/dismiss", json={"id": "other", "sig": "x"}).status_code == 200
+        assert c.post("/api/people/p1/insights/dismiss", json={"id": "not ok/id", "sig": "x"}).status_code == 422
         assert c.post("/api/people/nobody/insights/dismiss", json={"id": "guide-x"}).status_code == 404
 
 
