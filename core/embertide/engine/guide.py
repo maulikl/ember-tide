@@ -69,10 +69,18 @@ def tuning_guide(c, p, now: float) -> list[dict]:
     out: list[dict] = []
     lr = c.autopilot.learning(p, now) if getattr(c, "autopilot", None) else None
     if lr and not lr["done"] and p.settings.autopilot.mode != "off":
-        out.append({"id": "guide-learning", "severity": "info", "kind": "guide",
-                    "title": f"Autopilot is learning your nights: {lr['have']} of {lr['need']}",
-                    "detail": "For the first week it only watches, to learn what a normal night looks like for you. Suggestions start after that.",
-                    "evidence": [], "proposal": None})
+        from .away import is_away
+        if is_away(c.store, p.id, now):
+            # nights while away don't count, so the count can't move: say why instead of "0 of 7" with no end in sight
+            out.append({"id": "guide-learning", "severity": "info", "kind": "guide",
+                        "title": f"Autopilot's learning week waits while you're away ({lr['have']} of {lr['need']} nights so far)",
+                        "detail": "Nights while you're marked away don't count. It carries on from your first night back.",
+                        "evidence": [], "proposal": None})
+        else:
+            out.append({"id": "guide-learning", "severity": "info", "kind": "guide",
+                        "title": f"Autopilot is learning your nights: {lr['have']} of {lr['need']}",
+                        "detail": "For the first week it only watches, to learn what a normal night looks like for you. Its own suggestions start after that.",
+                        "evidence": [], "proposal": None})
     if len(nights) < 3:
         return out
     rows = []

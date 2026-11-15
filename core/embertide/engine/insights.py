@@ -24,6 +24,11 @@ def insights(person: Person, nights: list[dict], tz: ZoneInfo, now: float) -> li
     units, ck = person.settings.units, clock_style(person.settings)
     done = [n for n in nights if n.get("has_data") and not n.get("in_progress")]
     out: list[dict] = []
+    if not done and any(n.get("away") for n in nights):
+        # every recent night fell while they were marked away: nothing of theirs to learn from
+        return [{"id": "away", "title": "Insights wait while you're away", "severity": "info",
+                 "detail": "Nights while you're marked away are left out, so whatever lay on your side doesn't count as you. "
+                           "Insights pick up again from your first night back.", "evidence": [], "proposal": None}]
     if not done:
         return [{"id": "need_data", "title": "Not enough nights yet", "severity": "info",
                  "detail": "Insights start after the first full night. Keep sleeping on it.", "evidence": [], "proposal": None}]
