@@ -13,6 +13,7 @@ import { useApp } from "../ctx";
 import { colorKey, COLORS, personaColor, weightUnit } from "../format";
 import { SleepDataRows, sleepDataSummary } from "../screens/SettingsSleep";
 import type { PersonSettings, PersonView } from "../types";
+import type { PhoneSource } from "../native";
 import { BRANDS } from "../wearables";
 import { agoText } from "./PhoneRows";
 
@@ -24,9 +25,9 @@ import { agoText } from "./PhoneRows";
  */
 
 const DAY = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-const PHONE_LABEL: Record<string, string> = {
+const PHONE_LABEL: Record<PhoneSource, string> = {
   location: "home or away", wifi: "home Wi-Fi", calendar: "calendar times", alarm: "next alarm", charging: "charging and bedtime mode",
-  watch: "watch connected", dial: "bedside dial nearby", watch_hr: "watch heart rate at night",
+  watch: "watch connected", dial: "bedside dial nearby", watch_hr: "watch heart rate at night", steps: "steps",
 };
 const cap = (x: string) => x[0].toUpperCase() + x.slice(1);
 
@@ -91,14 +92,14 @@ export default function Me() {
               <div className="list">
                 <div className="row"><span>Temperature</span><TempUnits s={s} onChange={u => save({ units: u })} /></div>
                 <div className="row"><span>Weight<br /><small className="mute">Pets, bed scales and body weight</small></span><WeightUnits s={s} onChange={w => save({ weight_units: w })} /></div>
-                <div className="row"><span>Clock<br /><small className="mute">Times in the app and in messages. Auto follows this device.</small></span><ClockPick s={s} onChange={k => save({ clock: k })} /></div>
-                <div className="row"><span>Assistant language<br /><small className="mute">Ask and night reviews answer in it. Buttons and screens are English for now.</small></span><LanguagePick s={s} onChange={k => save({ language: k })} /></div>
-                <RegionRows canEdit={!readOnly} />
                 <div className="item mute" style={{ fontSize: 12.5 }}>
                   {(s.weight_units ?? "auto") === "auto"
                     ? `Follows the temperature: ${s.units === "F" ? "pounds with °F" : "kilograms with °C"}. Pick one to keep it either way.`
                     : <>Kept in {s.weight_units === "lb" ? "pounds" : "kilograms"} whatever the temperature. <button type="button" className="link" onClick={() => save({ weight_units: "auto" })}>Follow the temperature instead</button></>}
                 </div>
+                <div className="row"><span>Clock<br /><small className="mute">Times in the app and in messages. Auto follows this device.</small></span><ClockPick s={s} onChange={k => save({ clock: k })} /></div>
+                <div className="row"><span>Assistant language<br /><small className="mute">Ask and night reviews answer in it. Buttons and screens are English for now.</small></span><LanguagePick s={s} onChange={k => save({ language: k })} /></div>
+                <RegionRows canEdit={!readOnly} />
               </div>
             </Fold>
             <Fold id="studio.me.week" className="box" title="Your week" keepSummary defaultOpen summary={workDaysText(s.work_days ?? [0, 1, 2, 3, 4])}>
@@ -274,7 +275,7 @@ function PhoneBox({ p, s }: { p: PersonView; s: PersonSettings }) {
       summary={phone?.seen ? `phone seen ${agoText(now - phone.seen)}` : phone ? "no phone yet" : "…"}>
       <div className="list">
         <div className="row"><span>Phone</span><span className="mute" style={{ textAlign: "right" }}>{!phone ? "Checking…" : phone.seen ? `${phone.device || "Phone"} · last seen ${agoText(now - phone.seen)}` : "Hasn't reported yet"}</span></div>
-        <div className="row"><span>Shares</span><span className="mute" style={{ textAlign: "right" }}>{sharing.length ? sharing.map(x => PHONE_LABEL[x] ?? x).join(", ") : "nothing"}</span></div>
+        <div className="row"><span>Shares</span><span className="mute" style={{ textAlign: "right" }}>{sharing.length ? sharing.map(x => (PHONE_LABEL as Record<string, string>)[x] ?? x).join(", ") : "nothing"}</span></div>
         <div className="row"><span>Watch heart rate at night</span><span className="mute" style={{ textAlign: "right" }}>{!hrOn ? "Off" : watch?.seen ? `On · last batch ${agoText(now - watch.seen)}` : "On · nothing yet"}</span></div>
         <div className="row"><span>Watch or ring</span><span className="mute">{brand ?? "None picked"}</span></div>
       </div>
