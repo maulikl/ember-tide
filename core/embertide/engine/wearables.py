@@ -228,16 +228,23 @@ def status(c, p, lv: dict, now: float, learning_done: bool) -> list[dict]:
 def night_devices(c, p, start: float, end: float) -> list[dict]:
     """Which watch or ring a night's readings came from (heart rate, skin temperature, sleep stages)."""
     out: dict[str, dict] = {}
+
+    def add(name: str, what: str) -> None:
+        # one entry per device however it's spelled ("Simulated Watch" from the stages, "Simulated watch" from the
+        # heart rate): keyed without case or extra spaces, keeping the first spelling seen
+        key = " ".join(name.split()).casefold()
+        d = out.setdefault(key, {"name": name, "kind": device_kind(name), "what": []})
+        if what not in d["what"]:
+            d["what"].append(what)
+
     for metric in ROLES:
         for k, pts in device_series(c, p, metric, start, end, worn_only=False).items():
-            name = device_name(c, k)
-            out.setdefault(name, {"name": name, "kind": device_kind(name), "what": []})["what"].append(metric)
+            add(device_name(c, k), metric)
     for src, d in c.store.get_stages(p.id, start, end).items():
         if src == "orion":
             continue
-        name = (d.get("label") or src).split(" · ")[0]
-        out.setdefault(name, {"name": name, "kind": device_kind(name), "what": []})["what"].append("stages")
-    return sorted(out.values(), key=lambda d: d["name"])
+        add((d.get("label") or src).split(" · ")[0], "stages")
+    return sorted(out.values(), key=lambda d: d["name"].casefold())
 
 
 def night_coverage(c, p, now: float, days: int = 7) -> list[dict]:
