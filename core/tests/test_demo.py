@@ -17,9 +17,10 @@ H = {"X-EmberTide": "1"}
 
 
 def _night_tz() -> str:
-    """A fixed-offset zone where it is about 2 a.m. right now, so a night is always running."""
+    """A fixed-offset zone where it is about 11 p.m. right now: inside every day's bedtime window, so a night is always
+    running or getting ready. (2 a.m. failed on weeknights: past that rhythm's window, the night shows as missed.)"""
     import time as _t
-    off = (2 - _t.gmtime().tm_hour) % 24
+    off = (23 - _t.gmtime().tm_hour) % 24
     if off > 14:
         off -= 24
     return "Etc/GMT" + ("+" if off <= 0 else "-") + str(abs(off))
