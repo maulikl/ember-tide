@@ -30,6 +30,7 @@ import org.json.JSONObject
         Permission(alias = "location", strings = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION]),
         Permission(alias = "calendar", strings = [Manifest.permission.READ_CALENDAR]),
         Permission(alias = "bluetooth", strings = [Manifest.permission.BLUETOOTH_SCAN]),
+        Permission(alias = "steps", strings = [Manifest.permission.ACTIVITY_RECOGNITION]),
     ],
 )
 class EmberPhonePlugin : Plugin() {
@@ -68,6 +69,7 @@ class EmberPhonePlugin : Plugin() {
         "location", "wifi" -> listOf("location")
         "calendar" -> listOf("calendar")
         "dial" -> if (Build.VERSION.SDK_INT >= 31) listOf("bluetooth", "location") else listOf("location")
+        "steps" -> if (Build.VERSION.SDK_INT >= 29) listOf("steps") else emptyList()
         else -> emptyList()
     }
 

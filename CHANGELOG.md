@@ -5,6 +5,10 @@ minor versions, and each entry says what to check when upgrading.
 
 ## Unreleased
 
+- **Asks whether it's you or your pet when the signs disagree.** When someone gets on your side of the bed while your watch
+  says it isn't you or your phone counts you walking around (using the new **Steps** switch in From this phone), a
+  high-priority notification asks right away so you can tap who's there. Saying it's your pet keeps that side out of
+  your night until it's empty and undoes a false start.
 - **Got into bed and got up from the bed when the watch can't know.** A watch night that starts the moment it saw sleep
   (or ends the moment you woke) no longer sets the night's in-bed or got-up time: the bed's is used, so the Sleep summary
   doesn't show a false "0 min to drift off" or start the night late.

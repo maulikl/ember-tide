@@ -254,6 +254,50 @@ def consider(controller, zone: str, ep: dict, now: float) -> dict | None:
     return q
 
 
+def live_sign(q: dict) -> str:
+    """What disagreed with the bed, for a live question's wording."""
+    if q.get("why") == "watch":
+        return "Your watch says it isn't you"
+    if q.get("why") == "steps":
+        n = q.get("steps")
+        if n is not None:
+            n = int(n)
+            return f"Your phone counted {n} step{'s' if n != 1 else ''} since then"
+        return "Your phone counted you walking around"
+    return "Your phone says you're up"
+
+
+def ask_live(controller, zone: str, ep: dict | None, now: float, why: str, steps: int | None = None) -> dict | None:
+    """Signs disagree right now (the side sees someone, the watch or phone steps say otherwise): ask right away."""
+    hh = controller.household
+    pets = fitting_pets(hh, zone)
+    person = next((p for p in hh.people if p.zone == zone), None)
+    if not pets or person is None or zone in hh.guest or not getattr(person.settings, "pet_questions", True):
+        return None
+    guessed = ep.get("pet_id") if ep else None
+    ordered = [p for p in pets if p.id == guessed] + [p for p in pets if p.id != guessed]
+    span_start = round(ep["since"]) if ep and ep.get("since") is not None else round(now - 180)
+    readings = [r for r in ep.get("readings", [])][-480:] if ep else []
+    span = {"start": span_start, "end": round(now), "evidence": "conflict", "readings": readings}
+    store = controller.store
+    qs = questions(store)
+    grp = _group(now, controller.clock.tz)
+    for q in qs:                                     # one question at a time: an older open one is set aside
+        if q["person"] == person.id and q["status"] == "open":
+            q["status"] = "skipped"
+    q = {"id": uuid.uuid4().hex[:10], "person": person.id, "zone": zone, "group": grp, "kind": "live", "why": why,
+         **({"steps": int(steps)} if steps is not None else {}),
+         "created": now, "pets": [p.id for p in ordered][:3], "spans": [span], "status": "open", "answer": None,
+         "answered_at": None, "pushed": False}
+    qs.append(q)
+    _link(controller, qs, q, now)
+    _save(store, qs)
+    store.put(f"who_asked:{person.id}", grp)            # once a night (noon to noon)
+    store.event(now, "pet_question", person.id, "pets", zone=zone, question=q["id"], about="live", why=why,
+                **({"steps": int(steps)} if steps is not None else {}))
+    return q
+
+
 # ---------- one stretch, both sides ----------
 LINK_GAP_S = 15 * 60          # stretches this close in time on the two sides are the same visit (a dog across the bed)
 LEARN_COVER = 0.7             # an answer from the other side teaches from this side's readings only if it covers this much
@@ -369,6 +413,16 @@ def view(q: dict, household, tz, clock: str = "24") -> dict:
     a, b = q["spans"][0]["start"], q["spans"][-1]["end"]
     when = f"{_clock(a, tz, clock)}–{_clock(b, tz, clock)}"
     who = names[0] if len(names) == 1 else "one of your pets"
+    if q.get("kind") == "live":
+        conflict = live_sign(q)[0].lower() + live_sign(q)[1:]
+        choices = ([{"answer": "yes", "pet": pets[i].id, "label": f"It's {pets[i].name}"}
+                    for i in q["pets"] if i in pets]
+                   + [{"answer": "me", "label": "It's me"}, {"answer": "unsure", "label": "Not sure"}])
+        return {"id": q["id"], "zone": q["zone"], "kind": q["kind"], "status": q["status"], "answer": q["answer"],
+                "title": f"Is that you in bed, or {who}?", "who": who, "when": when,
+                "detail": f"Your side thinks you got into bed, but {conflict}. Tell it who's there.",
+                "start": a, "end": b, "spans": [{"start": s["start"], "end": s["end"], "evidence": s.get("evidence")} for s in q["spans"]],
+                "choices": choices}
     side = "your side of the bed" if q["zone"] in ("left", "right") else "the bed"   # asked of that side's sleeper
     them = names[0] if len(names) == 1 else "your pets"
     choices = ([{"answer": "yes", "pet": pets[i].id, "label": f"Yes, it was {pets[i].name}"}
@@ -401,9 +455,15 @@ def answer(controller, qid: str, pid: str, ans: str, pet_id: str | None, now: fl
             raise ValueError("which pet?")
         learn_pet(store, pet_id, readings)
         q["learned"] = "pet"
+        if q.get("kind") == "live" and hasattr(controller, "who_confirmed_pet"):
+            span_start = q["spans"][0]["start"] if q.get("spans") else now
+            controller.who_confirmed_pet(q["zone"], pet_id, span_start, now)
     elif ans == "me":
         widen_person(store, pid, readings)
         q["learned"] = "person"
+        if q.get("kind") == "live":
+            span_start = q["spans"][0]["start"] if q.get("spans") else now
+            controller.__dict__.setdefault("_who_me", {})[(q["zone"], round(span_start))] = now
     q.update(status="answered", answer=ans, answered_pet=pet_id if ans == "yes" else None, answered_at=now)
     spans_kept = [{"start": x["start"], "end": x["end"]} for x in q["spans"]]
     for x in q["spans"]:

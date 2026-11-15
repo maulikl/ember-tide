@@ -50,6 +50,16 @@ def update(store, pid: str, fields: dict, now: float, device: str | None = None,
     for k, v in fields.items():
         cur["data"][k] = v
         cur["ts"][k] = now
+    if fields.get("steps_total") is not None and fields.get("steps_at") is not None:
+        sa, st_val = float(fields["steps_at"]), float(fields["steps_total"])
+        hist = list(cur.get("steps_hist") or [])
+        if hist and st_val < hist[-1][1]:
+            hist = [[sa, st_val]]                        # phone rebooted: cumulative counter reset, start afresh
+        elif hist and sa == hist[-1][0]:
+            hist[-1] = [sa, st_val]
+        else:
+            hist.append([sa, st_val])
+        cur["steps_hist"] = hist[-12:]
     if device:
         cur["device"] = device[:60]
     if sharing is not None:
@@ -57,9 +67,12 @@ def update(store, pid: str, fields: dict, now: float, device: str | None = None,
         # a switch turned off: forget what it used to say
         drop = {"location": ("home", "distance_km", "heading_home", "eta_min"), "wifi": ("wifi_home",),
                 "calendar": ("evening_event_end", "early_start"), "alarm": ("next_alarm",),
-                "charging": ("charging", "bedtime_mode"), "watch": ("watch_connected",), "dial": ("dials",)}
+                "charging": ("charging", "bedtime_mode"), "watch": ("watch_connected",), "dial": ("dials",),
+                "steps": ("steps_total", "steps_at")}
         if "watch_hr" not in cur["sharing"] and store.get(f"watch_live:{pid}"):
             store.put(f"watch_live:{pid}", None)       # live watch heart rate switched off: stop using it at once
+        if "steps" not in cur["sharing"]:
+            cur.pop("steps_hist", None)
         for src, keys in drop.items():
             if src not in cur["sharing"]:
                 for k in keys:
@@ -246,6 +259,17 @@ def bedside_state(store, cur: dict | None, zone: str, now: float) -> str | None:
     if fresh(cur, "wifi_home", "wifi", now) is True and fresh(cur, "charging", "charging", now) is False:
         return "out"
     return None
+
+
+def steps_since(cur: dict | None, t: float, now: float) -> int | None:
+    """Steps counted strictly after `t`, using only readings taken at or after `t` (first is the baseline, latest is
+    the end). None when fewer than two such readings exist or the latest is older than PHONE_FRESH_S."""
+    if not cur:
+        return None
+    pts = [(float(at), float(tot)) for at, tot in (cur.get("steps_hist") or []) if float(at) >= t]
+    if len(pts) < 2 or now - pts[-1][0] > PHONE_FRESH_S:
+        return None
+    return max(0, round(pts[-1][1] - pts[0][1]))
 
 
 def bedside_vote(store, household, zone: str, now: float) -> float | None:
