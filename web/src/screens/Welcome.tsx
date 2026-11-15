@@ -326,7 +326,9 @@ export default function Welcome({ me, onDone }: { me: PersonView; onDone: () => 
 
   async function finish(fade = true) {
     setSaving(true);
-    try { await patch({ welcomed: true, setup_steps: [...done.current].slice(0, 30) }); } catch { /* offline: it shows again next time */ }
+    // skipped past "About you": still keep the region's unit the summary showed (a new person starts on it)
+    const keepUnits = !done.current.has("you") && units !== s0.units ? { units } : {};
+    try { await patch({ welcomed: true, setup_steps: [...done.current].slice(0, 30), ...keepUnits }); } catch { /* offline: it shows again next time */ }
     (window as unknown as { __etWelcome?: boolean }).__etWelcome = false;
     setSaving(false);
     if (!fade) { onDone(); return; }

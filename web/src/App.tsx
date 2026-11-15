@@ -77,6 +77,8 @@ function PhoneApp() {
   const lostServer = useSustained(!connected, 5000);
   const [simpleOn, setSimpleOn] = useState(false);
   const [welcomeDone, setWelcomeDone] = useState(false);
+  // "Run first-time setup again" (welcomed back to false) shows setup again, even if it was finished in this session
+  useEffect(() => { if (me && !me.settings.welcomed) setWelcomeDone(false); }, [me?.id, me?.settings.welcomed]);   // eslint-disable-line react-hooks/exhaustive-deps
   // right after first-time setup, Tonight rises in once (the class goes away so later screens just appear)
   const [arrive, setArrive] = useState(false);
   useEffect(() => { if (!arrive) return; const t = window.setTimeout(() => setArrive(false), 1200); return () => clearTimeout(t); }, [arrive]);

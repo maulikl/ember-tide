@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { api, isApp } from "../api";
+import { useApp } from "../ctx";
 import Fold from "../components/Fold";
 import WorkDays, { workDaysText } from "../components/WorkDays";
 import { isIOS, webPushSupport } from "../pwa";
@@ -57,12 +58,15 @@ export function SettingsWearable({ person, value, onChange }: { person: string; 
 }
 
 export function SetupAgain({ person }: { person: string }) {
+  const { say } = useApp();
   const [busy, setBusy] = useState(false);
   return (
     <div className="card list">
       <button type="button" className="row rowbtn" disabled={busy} onClick={async () => {
         setBusy(true);
-        try { await api.patch(`/api/people/${person}/settings`, { welcomed: false, setup_steps: [] }); } finally { setBusy(false); }
+        try { await api.patch(`/api/people/${person}/settings`, { welcomed: false, setup_steps: [] }); }
+        catch (e) { say(`Couldn't start setup again: ${(e as Error).message}`); }
+        finally { setBusy(false); }
       }}>
         <span>Run first-time setup again<br /><span className="mute" style={{ fontSize: 12 }}>The same short questions. Your answers so far are kept as the starting point.</span></span>
         <span className="mute">›</span>

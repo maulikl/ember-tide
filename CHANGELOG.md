@@ -5,6 +5,8 @@ minor versions, and each entry says what to check when upgrading.
 
 ## Unreleased
 
+- **Setup fixes.** "Run first-time setup again" works even right after finishing setup, and says so if it fails.
+  Skipping setup keeps your region's temperature unit, as the last screen showed.
 - **Small app fixes.** Last night's review shows its suggestion in your units and with the phase's name (it showed °C
   and an id like `fall_asleep`). Ending your partner's night says their side is off, not yours. The Sleep page says so
   when a night can't be loaded instead of showing Loading… forever. Warmer/Cooler before Turn on stays within what the
