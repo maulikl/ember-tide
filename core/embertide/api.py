@@ -545,6 +545,8 @@ def build_router(app_state) -> APIRouter:
             est = next((x for x in st if x["kind"] == "estimate"), None)
             if est:
                 s["stages"] = est                        # "trust the bed more": the bed's own estimate first
+        from .engine.compare import lean_on
+        lean_on(s, s.get("compare"), s.get("stages"), c.clock.now_ts())   # the story uses the times the setting picked
         from .voice import night_words
         return night_words(s, p, d)                      # story lines and the check-in question in this person's tone
 

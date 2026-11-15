@@ -251,6 +251,41 @@ def chosen_times(bed: dict, wear: dict | None, fix: dict | None, trust: str, off
     return out
 
 
+LEAN_FIELDS = {"in_bed_at": "in_bed_at", "asleep_at": "fell_asleep_est", "woke_at": "woke_at", "out_at": "out_at"}
+
+
+def lean_on(summary: dict, cmp: dict | None, stages: dict | None, now: float) -> dict:
+    """The night's story follows the person's "Which to trust more" setting: when chosen_times() took a time from the
+    watch (or both), the summary shows that time, works out the time in bed and to drift off from it, and counts
+    "asleep" from the watch's stages. The bed's own values stay in summary["bed_times"]. Trusting the bed: unchanged."""
+    if not cmp or not cmp.get("available") or not cmp.get("has_wearable") or cmp.get("trust") == "bed":
+        return summary
+    t = cmp.get("times") or {}
+    used = {k: t[k]["ts"] for k in LEAN_FIELDS if (t.get(k) or {}).get("source") in ("watch", "both")}
+    if summary.get("in_progress"):
+        used.pop("out_at", None)                       # still in bed: no got-up time yet, whatever the watch says
+        used.pop("woke_at", None)
+    if not used:
+        return summary
+    summary["bed_times"] = {f: summary.get(f) for f in (*LEAN_FIELDS.values(), "in_bed_min", "settled_min", "time_to_settle_min")}
+    for k, ts_ in used.items():
+        summary[LEAN_FIELDS[k]] = ts_
+    a, b = summary.get("in_bed_at"), summary.get("out_at")
+    end = now if summary.get("in_progress") else b
+    if a and end and end > a:
+        summary["in_bed_min"] = max(0, round((end - a) / 60) - (summary.get("up_minutes") or 0))
+    fell = summary.get("fell_asleep_est")
+    if a and fell and fell >= a:
+        summary["time_to_settle_min"] = round((fell - a) / 60)
+    if stages and stages.get("kind") == "wearable":
+        tot = stages.get("totals") or {}
+        asleep = sum(tot.get(k) or 0 for k in ("light", "deep", "rem"))
+        if asleep:
+            summary["settled_min"] = asleep
+    summary["times_from"] = "watch"
+    return summary
+
+
 def asleep_away_first(rows: list[dict], wear: dict | None, bed: dict) -> tuple[float, float] | None:
     """The wearable's night began 20+ min before the bed saw anyone, and this side was (nearly) empty meanwhile:
     asleep somewhere else first (2026-11-09: asleep on the couch at 11:46 PM, in bed at 12:55 AM). (from, to) or None."""

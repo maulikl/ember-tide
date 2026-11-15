@@ -183,3 +183,29 @@ def test_asleep_on_the_couch_first_is_described_not_a_disagreement():
     busy = [{"ts": a + i * 60, "occupied": 1} for i in range(85)] + rows[85:]       # someone WAS on this side
     assert asleep_away_first(busy, wear, bed) is None
     assert asleep_away_first(rows, {"start": a + 4800}, bed) is None                # only 5 min apart: same thing
+
+
+async def test_summary_follows_which_to_trust(tmp_path):
+    """Trusting the watch: the night's story uses the watch's times, its time in bed is worked out from them and
+    "asleep" comes from the watch's stages, so the line agrees with "In-bed time from your watch" below it.
+    Trusting the bed: the bed's numbers, unchanged."""
+    from embertide.engine.stages import collect
+    n = await _night(tmp_path)
+    segs = [{"start": ts("2026-11-05T22:40"), "end": ts("2026-11-05T22:55"), "stage": "awake"},
+            {"start": ts("2026-11-05T22:55"), "end": ts("2026-11-06T02:00"), "stage": "light"},
+            {"start": ts("2026-11-06T02:00"), "end": ts("2026-11-06T02:10"), "stage": "awake"},
+            {"start": ts("2026-11-06T02:10"), "end": ts("2026-11-06T06:20"), "stage": "deep"},
+            {"start": ts("2026-11-06T06:20"), "end": ts("2026-11-06T06:35"), "stage": "awake"}]
+    n.store.put_stages("p1", "hc", "Galaxy Watch · Health Connect", segs, segs[0]["start"], segs[-1]["end"])
+    w = (ts("2026-11-05T20:00"), ts("2026-11-06T09:00"))
+    stages = collect(n.store, n.p1, *w)[0]
+    bed = _sum(n)
+    s = C.lean_on(_sum(n), C.compare_night(n.c, n.p1, D), stages, n.clock.now_ts())
+    assert s["in_bed_at"] == ts("2026-11-05T22:40") and s["out_at"] == ts("2026-11-06T06:35")
+    assert s["fell_asleep_est"] == ts("2026-11-05T22:55") and s["time_to_settle_min"] == 15
+    assert s["in_bed_min"] == round((s["out_at"] - s["in_bed_at"]) / 60) - (s.get("up_minutes") or 0)
+    assert s["settled_min"] == 185 + 250                                    # light + deep from the watch
+    assert s["bed_times"]["in_bed_at"] == bed["in_bed_at"] and s["times_from"] == "watch"
+    n.p1.settings.autopilot.trust_more = "bed"
+    b = C.lean_on(_sum(n), C.compare_night(n.c, n.p1, D), stages, n.clock.now_ts())
+    assert b["in_bed_at"] == bed["in_bed_at"] and b["in_bed_min"] == bed["in_bed_min"] and "bed_times" not in b
