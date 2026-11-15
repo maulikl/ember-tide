@@ -63,7 +63,7 @@ class ApplyBody(BaseModel):
 
 class GuideDismissBody(BaseModel):
     id: str
-    sig: str = ""           # what was suggested (the new time): a different suggestion later is shown again
+    sig: str = ""           # proposal target value (or card title when there is no proposal): a changed card is shown again
 
 
 class StageSeg(BaseModel):
@@ -668,20 +668,23 @@ def build_studio_router(state) -> APIRouter:
             if a and newest <= a["night"]:
                 i["applied"] = a                     # no new nights since it was applied: don't suggest it again yet
                 i["proposal"] = None
+        now = ctl().clock.now_ts()
         gone = ctl().store.get(f"guide_dismissed:{pid}", {})
         for i in out:
+            prop = i.get("proposal")
+            sig = str(prop.get("to", "")) if prop else (i.get("title") or "")
             d = gone.get(i["id"])
-            if d and d["sig"] == str((i.get("proposal") or {}).get("to", "")):
+            if d and d.get("sig") == sig and (prop or now - d.get("ts", 0) < 14 * 86400):
                 i["dismissed"] = True
         return out
 
 
     @r.post("/people/{pid}/insights/dismiss")
     async def dismiss_insight(pid: str, b: GuideDismissBody):
-        """"Not now" on a tuning-guide suggestion: hidden on every device of this person until the suggestion changes."""
+        """"Not now" on an insight card: hidden on every device of this person until its suggestion/title changes (or 14 days for info cards)."""
         person(pid)
-        if not b.id.startswith("guide-"):
-            raise HTTPException(422, "only tuning-guide suggestions can be dismissed here")
+        if not re.fullmatch(r"[A-Za-z0-9_-]{1,60}", b.id):
+            raise HTTPException(422, "bad insight id")
         gone = ctl().store.get(f"guide_dismissed:{pid}", {})
         gone[b.id] = {"sig": b.sig, "ts": ctl().clock.now_ts()}
         if len(gone) > 40:
