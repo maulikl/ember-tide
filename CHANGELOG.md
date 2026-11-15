@@ -5,6 +5,10 @@ minor versions, and each entry says what to check when upgrading.
 
 ## Unreleased
 
+- **Watch or ring shows what is actually sending.** Instead of "None picked" when no brand was chosen in setup, Studio and
+  phone Settings list each watch or ring source that reports and when it was last seen (or that it went quiet), falling
+  back to your picked brand or "None yet".
+
 - **Insights you don't want can be put away.** Any card on Studio → Insights & Ask now has a "Not now" button that hides it across your devices until its wording or suggestion changes (or after 14 days for informational cards), with a "Show" link at the end of each group to peek at hidden cards, and the Ask panel can be tucked away with a "Hide" link.
 - **No "hasn't sent anything" card for a watch you replaced.** If one source of watch or ring readings stops but another
   still sends (for example after moving from Health Sync to Health Connect), Insights no longer says it has gone quiet.

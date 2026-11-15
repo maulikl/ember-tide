@@ -286,8 +286,11 @@ def test_partner_and_viewer_dont_read_the_other_persons_private_data(tmp_path):
         g = TestClient(c.app)
         assert g.post("/api/auth/accept", json={"code": code, "username": "sam", "password": PW}).status_code == 200
         for path in ("/api/people/p1/phone-context", "/api/people/p1/nights", "/api/people/p1/watch-hr",
-                     "/api/people/p1/autopilot", "/api/people/p1/sleeps", "/api/explore?person_id=p1"):
+                     "/api/people/p1/autopilot", "/api/people/p1/sleeps", "/api/people/p1/wearables",
+                     "/api/explore?person_id=p1"):
             assert g.get(path).status_code == 403, path
+        assert g.get("/api/people/p2/wearables").status_code == 200
+        assert c.get("/api/people/p1/wearables").status_code == 200
         left = next(p for p in c.app.state.oura.c.household.people if p.id == "p1").zone
         right = next(p for p in c.app.state.oura.c.household.people if p.id == "p2").zone
         assert g.get(f"/api/history?zone={left}").status_code == 403

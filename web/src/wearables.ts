@@ -81,3 +81,45 @@ export function gives(t: Partial<Record<Field, Level>> | null | undefined, level
   const f = (Object.keys(FIELD_NAMES) as Field[]).filter(k => t[k] === level).map(k => FIELD_NAMES[k]);
   return f.length <= 1 ? f.join("") : `${f.slice(0, -1).join(", ")} and ${f[f.length - 1]}`;
 }
+
+export interface WearableStatus {
+  name: string;
+  kind: string;
+  last: number;
+  quiet: boolean;
+}
+
+function dayWord(ts: number, nowS: number, tz?: string): string {
+  let opt: Intl.DateTimeFormatOptions | undefined = tz ? { timeZone: tz } : undefined;
+  const dayMs = (t: number) => {
+    const parts = new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", day: "2-digit", ...opt }).format(new Date(t * 1000)).split("-");
+    return Date.UTC(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+  };
+  let diff: number;
+  try {
+    diff = Math.round((dayMs(nowS) - dayMs(ts)) / 86400000);
+  } catch {
+    opt = undefined;
+    diff = Math.round((dayMs(nowS) - dayMs(ts)) / 86400000);
+  }
+  if (diff <= 0) return "today";
+  if (diff === 1) return "yesterday";
+  if (diff < 7) return new Date(ts * 1000).toLocaleDateString("en-US", { weekday: "long", ...opt });
+  return new Date(ts * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", ...opt });
+}
+
+/** One-line summary of the watch or ring sources reporting lately, falling back to the picked brand or "None yet". */
+export function wearableSummary(sources: WearableStatus[] | null | undefined, brandId?: string | null, tz?: string, nowS = Date.now() / 1000): string {
+  if (sources && sources.length > 0) {
+    const active = sources.filter(s => !s.quiet);
+    const quiet = sources.filter(s => s.quiet);
+    const activeText = active.length > 0
+      ? `${active.map(s => s.name).join(", ")} · ${dayWord(Math.max(...active.map(s => s.last)), nowS, tz)}`
+      : "";
+    const quietText = quiet.length > 0
+      ? `${quiet.map(s => s.name).join(", ")} (quiet since ${dayWord(Math.max(...quiet.map(s => s.last)), nowS, tz)})`
+      : "";
+    return [activeText, quietText].filter(Boolean).join("; ");
+  }
+  return BRANDS.find(b => b.id === brandId)?.name ?? "None yet";
+}

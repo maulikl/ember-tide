@@ -198,3 +198,17 @@ def test_repair_forgets_wrongly_shifted_readings_once(tmp_path):
         again = wear_repair.repair(store, "p1", TZ, ctl.clock.now_ts(), apply=True)
         assert again["items"][0]["done"] and again["items"][0]["deleted"] == 0
         assert len(store.samples(src, t0 - 1, t0 + 3600)) == 10
+
+
+def test_wearables_endpoint_lists_reporting_sources(tmp_path):
+    with make(tmp_path) as c:
+        ctl = c.app.state.notifier.c
+        now = ctl.clock.now_ts()
+        assert c.get("/api/people/p1/wearables").json() == []
+        post(c, "Samsung Health", "hr", [[now - 3600, 62.0], [now - 1800, 60.0]])
+        ctl.store.samples_many([(now - 40 * 3600, "wear:p1:hr:Health Sync", 61.0)])
+        got = {w["name"]: w for w in c.get("/api/people/p1/wearables").json()}
+        assert set(got) == {"Samsung Health", "Health Sync"}
+        assert set(got["Samsung Health"]) == {"name", "kind", "last", "quiet"}
+        assert got["Samsung Health"]["quiet"] is False and got["Samsung Health"]["last"] > now - 7200
+        assert got["Health Sync"]["quiet"] is True
