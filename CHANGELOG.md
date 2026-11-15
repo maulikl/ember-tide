@@ -5,6 +5,11 @@ minor versions, and each entry says what to check when upgrading.
 
 ## Unreleased
 
+- **Small app fixes.** Last night's review shows its suggestion in your units and with the phase's name (it showed °C
+  and an id like `fall_asleep`). Ending your partner's night says their side is off, not yours. The Sleep page says so
+  when a night can't be loaded instead of showing Loading… forever. Warmer/Cooler before Turn on stays within what the
+  bed accepts. Studio's simulator and live signals use your own units. Ending guest mode from Settings shows an error
+  if it fails. The Help text for Warmer/Cooler points at the right place.
 - **Setup and Help layout fixes.** In setup, the "More below" pill no longer covers the work-day buttons: it shows only
   when a good part of the step is hidden, and goes away once you scroll. On a phone, a link to a Studio section (Help,
   Updates) no longer leaves the heading under the tab row.

@@ -190,7 +190,8 @@ export default function SleepScreen() {
   useEffect(() => { api.get<{ pets: { id: string; name: string }[] }>("/api/pets").then(r => setPets(r.pets)).catch(() => setPets([])); }, []);
   // before tonight has anything, open on last night
   useEffect(() => { if (me) api.get<Night[]>(`/api/people/${me.id}/nights?count=7`).then(n => { setNights(n); setDate(d => d ?? (n[0]?.has_data || !n[1]?.has_data ? n[0]?.date : n[1].date) ?? null); }).catch(() => {}); }, [me?.id, minute]);
-  useEffect(() => { if (me && date) api.get<Night>(`/api/people/${me.id}/night?date=${date}`).then(setNight).catch(() => setNight(null)); }, [me?.id, date, minute]);
+  const [nightErr, setNightErr] = useState(false);
+  useEffect(() => { if (me && date) api.get<Night>(`/api/people/${me.id}/night?date=${date}`).then(x => { setNight(x); setNightErr(false); }).catch(() => { setNight(x => (x && x.date === date ? x : null)); setNightErr(true); }); }, [me?.id, date, minute]);
   useEffect(() => { if (me && date) api.get<StageSrc[]>(`/api/people/${me.id}/stages?date=${date}`).then(setAllStages).catch(() => setAllStages([])); }, [me?.id, date, minute]);
   if (!me || !snap) return null;
   const u = me.settings.units;
@@ -233,7 +234,7 @@ export default function SleepScreen() {
           </div>}
         </>;
       })()}
-      {!n ? <p className="mute">Loading…</p> : n.away ? (
+      {!n ? <p className="mute">{nightErr ? "Couldn't load this night. It tries again every couple of minutes, or reopen Sleep." : "Loading…"}</p> : n.away ? (
         <div className="card"><p>You were away.</p><p className="mute" style={{ fontSize: 13 }}>Nothing is shown for this night because you weren't in bed.</p></div>
       ) : !n.has_data ? (
         n.in_progress

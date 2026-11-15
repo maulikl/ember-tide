@@ -1,12 +1,18 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import { useApp } from "../ctx";
+import { temp } from "../format";
 import { swipeDismisses, useSwipeAway } from "./useSwipeAway";
 
 export { swipeDismisses };
 
 interface Proposal { rhythm_id: string; phase_id: string; field: string; from?: number; to: number }
 interface Review { answer?: string; proposal?: Proposal | null; model?: string | null; date?: string; dismissed?: boolean }
+
+/** A phase's own name ("Fall asleep"), not its id ("fall_asleep"). */
+export function phaseLabel(id: string, phases: { id: string; name: string }[]): string {
+  return phases.find(p => p.id === id)?.name ?? (id.charAt(0).toUpperCase() + id.slice(1)).replace(/_/g, " ");
+}
 
 /** Pure rule for whether the card shows: the review is on, there is a review for last night, it wasn't dismissed, and the
  *  next night hasn't started. */
@@ -20,7 +26,9 @@ export function reviewVisible(r: Review | null, on: boolean, state: string, hidd
  * this night's review for this person on every device (kept on the server). Vertical scrolling is never taken over:
  * a drag only counts once it is clearly sideways.
  */
-export default function ReviewNote({ person, on, state }: { person: string; on: boolean; state: string }) {
+export default function ReviewNote({ person, on, state, units = "F", phases = [] }: {
+  person: string; on: boolean; state: string; units?: "F" | "C"; phases?: { id: string; name: string }[];
+}) {
   const { say } = useApp();
   const [r, setR] = useState<Review | null>(null);
   const [open, setOpen] = useState(false);
@@ -54,7 +62,7 @@ export default function ReviewNote({ person, on, state }: { person: string; on: 
       <p className={`revtext${open ? " open" : ""}`}>{r!.answer}</p>
       {long && <button type="button" className="link" aria-expanded={open} onClick={() => setOpen(v => !v)}>{open ? "Show less" : "Show more"}</button>}
       {r!.proposal && <div className="row" style={{ marginTop: 8 }}>
-        <span style={{ fontSize: 13 }}>Suggested: {r!.proposal.phase_id} to {Math.round(r!.proposal.to * 10) / 10}°C</span>
+        <span style={{ fontSize: 13 }}>Suggested: {phaseLabel(r!.proposal.phase_id, phases)} at {temp(r!.proposal.to, units, units === "C" ? 1 : 0)}</span>
         <button className="btn pri" style={{ minHeight: 44 }} onClick={apply}>Apply</button></div>}
       {r!.model && <small className="faint" style={{ display: "block", marginTop: 6, fontSize: 11.5 }}>Written by {r!.model}</small>}
     </div>

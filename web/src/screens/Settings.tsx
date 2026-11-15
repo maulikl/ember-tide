@@ -31,7 +31,7 @@ const AP_PHASES = [["wind_down", "Wind-down"], ["fall_asleep", "Fall asleep"], [
 const AP_REC = ["fall_asleep", "deep", "late"];
 
 export default function Settings() {
-  const { me, partner, setMe, snap } = useApp();
+  const { me, partner, setMe, snap, act } = useApp();
   const auth = useAuth();
   useBedFromFoot();                                    // left/right as you lie (bed orientation)
   const [s, setS] = useState<PersonSettings | null>(null);
@@ -241,7 +241,7 @@ export default function Settings() {
         <div className="card">
           {Object.entries(snap.guest ?? {}).map(([z, g]) => g && (
             <div className="row" key={z}><span>{sideTitle(z as Side)} · guest{g.on ? "" : " (off)"}</span>
-              <button className="pill" onClick={() => api.post(`/api/guest/${z}/stop`, {})}>End</button></div>
+              <button className="pill" onClick={() => void act(`/api/guest/${z}/stop`, {})}>End</button></div>
           ))}
           <GuestStart />
         </div>

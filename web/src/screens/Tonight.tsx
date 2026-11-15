@@ -219,13 +219,13 @@ export default function Tonight({ setSimpleOn }: { setSimpleOn: (v: boolean) => 
   const canEnd = canAdjust && !!n.running && !n.skip;
   const morning = canEnd && (!!n.lie_in || n.phase_id === "wake");
   const endNight = () => {
-    if (window.confirm(`End the night now? ${target.id === me.id ? "Your" : `${target.name}'s`} side turns off.`)) { setSheet(false); void act(`${base}/tonight`, { action: "end" }); say("Night ended. Your side is off."); }
+    if (window.confirm(`End the night now? ${target.id === me.id ? "Your" : `${target.name}'s`} side turns off.`)) { setSheet(false); void act(`${base}/tonight`, { action: "end" }); say(target.id === me.id ? "Night ended. Your side is off." : `Night ended. ${target.name}'s side is off.`); }
   };
   const showTurnOn = idle && canAdjust;
   const turnOn = () => { setOnTemp(null); return act(`${base}/adjust`, onLen ? { temp_c: pendingT, minutes: onLen, until: "next_phase" } : { temp_c: pendingT, until: "next_phase" }); };
   const endsAt = onLen ? `until ${clock(snap.now + onLen * 60, snap.tz)}` : "until bedtime";
   const nudge = (sign: number) => showTurnOn
-    ? setOnTemp(Math.round((pendingT + sign * step) * 100) / 100)
+    ? setOnTemp(Math.min(45, Math.max(10, Math.round((pendingT + sign * step) * 100) / 100)))   // the server's 10–45 °C
     : act(`${base}/adjust`, { delta_c: sign * step, until: manualOn ? "next_phase" : until });
 
   const whoseSeg = (
@@ -307,7 +307,7 @@ export default function Tonight({ setSimpleOn }: { setSimpleOn: (v: boolean) => 
       <div className="notes">
         <AwayNote person={target} me={me} isOwner={isOwner} tz={snap.tz} />
         {v === "me" && !me.presence.present && <PetQuestion person={me.id} />}
-        {v === "me" && <ReviewNote person={me.id} on={!!me.settings.autopilot?.ai_review} state={me.night.state} />}
+        {v === "me" && <ReviewNote person={me.id} on={!!me.settings.autopilot?.ai_review} state={me.night.state} units={me.settings.units} phases={me.phases} />}
         <CareTonight running={snap.people.some(p => p.night.state === "rhythm" || p.night.state === "out_of_bed_hold")} />
         {v === "me" && <GuideNote person={me.id} />}
       </div>

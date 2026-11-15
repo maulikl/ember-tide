@@ -231,7 +231,7 @@ function Console() {
 }
 
 function Simulator() {
-  const { snap } = useApp();
+  const { snap, me } = useApp();
   const [sim, setSim] = useState<{ speed: number; now: string; scripted: boolean; echo: boolean; blips: boolean; room_c: number; presence: Record<string, boolean> } | null>(null);
   const [jump, setJump] = useState("");
   const load = () => api.get<typeof sim>("/api/sim").then(setSim).catch(() => setSim(null));
@@ -271,7 +271,7 @@ function Simulator() {
               <input type="checkbox" className="toggle" checked={!!sim.presence[p.zone]} onChange={e => post({ presence: { [p.zone]: e.target.checked } })} /></div>))}
           <div className="row"><span>Cross-side echo (real quirk)</span><input type="checkbox" className="toggle" checked={sim.echo} onChange={e => post({ echo: e.target.checked })} /></div>
           <div className="row"><span>Half-second false blips (real quirk)</span><input type="checkbox" className="toggle" checked={sim.blips} onChange={e => post({ blips: e.target.checked })} /></div>
-          <div className="row"><span>Room temperature</span><span className="num">{temp(sim.room_c, "F")}</span></div>
+          <div className="row"><span>Room temperature</span><span className="num">{temp(sim.room_c, me?.settings.units ?? snap.people[0]?.settings.units ?? "F")}</span></div>
         </div>
       </div>
     </>
@@ -308,7 +308,7 @@ function LiveSignals() {
   useEffect(() => { const f = () => api.get<{ sources: typeof src }>("/api/sources").then(d => setSrc(d.sources)).catch(() => {}); f(); const t = setInterval(f, 4000); return () => clearInterval(t); }, []);
   useEffect(() => { snap?.people.forEach(p => api.get<{ title: string; detail: string; severity: string }[]>(`/api/people/${p.id}/insights`).then(r => setIns(x => [...x.filter(i => i.person !== p.name), ...r.filter(i => i.severity === "suggest").slice(0, 2).map(i => ({ ...i, person: p.name }))])).catch(() => {})); }, [snap?.people.length]);
   if (!snap) return null;
-  const u = snap.people[0]?.settings.units ?? "F";
+  const u = me?.settings.units ?? snap.people[0]?.settings.units ?? "F";
   const wu = weightUnit(me?.settings ?? snap.people[0]?.settings);
   const fmt =(s: typeof src[number]) => s.value == null ? "—" : s.unit === "°C" ? `${(u === "F" ? cToF(s.value) : s.value).toFixed(1)}°` : s.role === "light" ? (s.value >= 0.5 ? "on" : "off") : s.role === "leak" ? (s.value >= 0.5 ? "wet" : "dry") : s.role === "presence" ? (s.value >= 0.5 ? "someone there" : "empty")
     : s.role === "home" ? (s.value >= 0.5 ? "home" : "away") : s.role === "location" ? (s.value < 0.3 ? "home" : `${s.value.toFixed(1)} km`)

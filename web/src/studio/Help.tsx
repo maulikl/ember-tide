@@ -34,7 +34,7 @@ const SECTIONS: Section[] = [
   {
     id: "tonight", title: "Tonight controls",
     items: [
-      { term: "Warmer / Cooler", text: "Nudges your side by 1° each press. By default it lasts until the next part of the night; from the Tonight menu you can make it last all night or change your rhythm for every night." },
+      { term: "Warmer / Cooler", text: "Nudges your side by 1° each press. By default it lasts until the next part of the night; tap “Changes last…” under the buttons to make it last the rest of the night. To change every night, edit your rhythm on the Rhythm tab." },
       { term: "Hot flash / Cold flash", text: "A quick blast of cold or warmth, 15 minutes by default, then it eases back to the plan. Press again for 5 more minutes, or stop it early. Change the defaults in Settings." },
       { term: "Pause", text: "Turns your side off for an hour, then it carries on." },
       { term: "Off tonight", text: "Turns your side off until tomorrow evening. Pressing + or − brings it back." },
