@@ -11,7 +11,7 @@ import Sheet from "../components/Sheet";
 import Glance from "../components/Glance";
 import { useLayout } from "../components/layout";
 import { useApp } from "../ctx";
-import { clock, contextText, deltaText, isNight, mins, mmss, personaColor, STATE_TEXT, stepC, tempNum } from "../format";
+import { clock, contextText, deltaText, isNight, mins, mmss, personaColor, STATE_TEXT, stepC, tempNum, wakeSourceText } from "../format";
 import type { PersonView, View } from "../types";
 import Simple from "./Simple";
 import AwayNote from "../components/AwayNote";
@@ -289,6 +289,10 @@ export default function Tonight({ setSimpleOn }: { setSimpleOn: (v: boolean) => 
             {focus.bed.measured_c != null && <span>Bed {tempNum(focus.bed.measured_c, u)}°</span>}
             {focus.presence.hr && <span>Heart rate {focus.presence.hr}</span>}
             {(() => { const t = contextText(n, snap.now, snap.tz); return t ? <span>{t}</span> : null; })()}
+            {focus.schedule && (() => {
+              const src = wakeSourceText(focus.schedule.wake_source);
+              return src ? <span>Wake {clock(focus.schedule.wake, snap.tz)} · {src}</span> : null;
+            })()}
           </div>
         </div>
       ) : (
@@ -415,7 +419,7 @@ export default function Tonight({ setSimpleOn }: { setSimpleOn: (v: boolean) => 
           {!canAdjust && <p className="mute" style={{ fontSize: 13, padding: "8px 0" }}>{target.name} hasn't shared control of their side. They can change that in Settings → Sharing.</p>}
           {canAdjust && n.context?.early_start && target.schedule && target.schedule.wake > n.context.early_start - 2700 && (() => {
             const w = n.context!.early_start! - 45 * 60;                 // warm wake 45 min before the early start
-            return <button className="item" onClick={() => run(`${base}/context`, { wake: w })}>Wake up earlier tonight<small>early start at {clock(n.context!.early_start!, snap.tz)} · warm wake from {clock(w - 30 * 60, snap.tz)}</small></button>;
+            return <button className="item" onClick={() => run(`${base}/context`, { wake: w, wake_source: "calendar" })}>Wake up earlier tonight<small>early start at {clock(n.context!.early_start!, snap.tz)} · warm wake from {clock(w - 30 * 60, snap.tz)}</small></button>;
           })()}
           {(canAdjust || target.id === me.id || isOwner) && <div className="k" style={{ padding: "10px 2px 0" }}>Not sleeping here?</div>}
           {/* shortest to longest: an hour, tonight, a few days */}

@@ -19,7 +19,7 @@ function clearPushed(person: string, native = true) {
     .then(ns => ns?.forEach(n => n.close())).catch(() => { /* no service worker here: nothing to clear */ });
 }
 
-export default function PetQuestion({ person, onAnswered, notifications = true }: { person: string; onAnswered?: () => void;
+export default function PetQuestion({ person, start, end, onAnswered, notifications = true }: { person: string; start?: number; end?: number; onAnswered?: () => void;
   /** clear this phone's own pet notification once nothing is left to answer (off where someone else's questions show) */
   notifications?: boolean }) {
   const [q, setQ] = useState<PetQ | null>(null);
@@ -39,7 +39,7 @@ export default function PetQuestion({ person, onAnswered, notifications = true }
     return () => { live = false; window.clearInterval(t); document.removeEventListener("visibilitychange", vis); };
   }, [person]);
   if (done) return <div className="card petq" role="status"><p style={{ margin: 0, fontSize: 14 }}>{done}</p></div>;
-  if (!q) return null;
+  if (!q || (start != null && end != null && ((q.end ?? q.start) < start || q.start > end))) return null;
   const answer = async (c: PetQ["choices"][number]) => {
     setBusy(true); setErr(null);
     try {

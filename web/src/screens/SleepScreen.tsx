@@ -218,7 +218,8 @@ export default function SleepScreen() {
         const older = idx >= 0 && idx < list.length - 1 ? list[idx + 1] : null;
         const newer = idx > 0 ? list[idx - 1] : null;
         const week = [...list].slice(0, 7).reverse();
-        const maxMin = Math.max(480, ...week.map(x => x.in_bed_min ?? 0));
+        const barMin = (x: Night) => (n && !n.away && n.has_data && x.date === n.date ? n.in_bed_min : x.in_bed_min);
+        const maxMin = Math.max(480, ...week.map(x => barMin(x) ?? 0));
         return <>
           <div className="daynav">
             <button aria-label="Previous night" data-key="arrowleft" disabled={!older} onClick={() => older && setDate(older.date)}>‹</button>
@@ -227,11 +228,11 @@ export default function SleepScreen() {
             <button aria-label="Next night" data-key="arrowright" disabled={!newer} onClick={() => newer && setDate(newer.date)}>›</button>
           </div>
           {week.length > 1 && <div className="week" role="tablist" aria-label="Last 7 nights">
-            {week.map(x => { const d = new Date(x.date + "T12:00:00"); const sel = x.date === date;
+            {week.map(x => { const d = new Date(x.date + "T12:00:00"); const sel = x.date === date; const m = barMin(x);
               return <button key={x.date} role="tab" aria-selected={sel} className={sel ? "on" : ""} onClick={() => setDate(x.date)} title={x.label}>
-                <span className="bar"><i style={{ height: `${x.has_data ? Math.max(6, ((x.in_bed_min ?? 0) / maxMin) * 100) : 0}%` }} /></span>
+                <span className="bar"><i style={{ height: `${x.has_data ? Math.max(6, ((m ?? 0) / maxMin) * 100) : 0}%` }} /></span>
                 <span className="d">{x.in_progress ? "Now" : d.toLocaleDateString([], { weekday: "narrow" })}</span>
-                <span className="h">{x.has_data ? hShort(x.in_bed_min) : x.away ? "away" : "—"}</span></button>; })}
+                <span className="h">{x.has_data ? hShort(m) : x.away ? "away" : "—"}</span></button>; })}
           </div>}
         </>;
       })()}
@@ -272,7 +273,10 @@ export default function SleepScreen() {
         {(n.naps ?? []).length > 0 && <NapsCard naps={n.naps!} nightMin={n.in_progress ? null : n.night_asleep_min ?? null} />}
         {!n.in_progress && <NightFix key={n.date} person={me.id} date={n.date} tz={snap.tz} pets={pets}
           ups={n.moments.filter(m => m.kind === "out_of_bed" && !m.corrected).map(m => ({ ts: m.ts, minutes: m.minutes }))}
-          onChanged={() => api.get<Night>(`/api/people/${me.id}/night?date=${n.date}`).then(setNight).catch(() => {})} />}
+          onChanged={() => {
+            api.get<Night>(`/api/people/${me.id}/night?date=${n.date}`).then(setNight).catch(() => {});
+            api.get<Night[]>(`/api/people/${me.id}/nights?count=7`).then(setNights).catch(() => {});
+          }} />}
         {!n.in_progress && (
           <div className="card">
             <span>{n.voice?.checkin ?? "How was the temperature?"}</span>

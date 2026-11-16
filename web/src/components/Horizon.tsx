@@ -64,7 +64,8 @@ export default function Horizon({ people, now, tz, units, height = 150, gradient
       <text x={W / 2} y={H / 2} textAnchor="middle" fill="var(--mute)" fontSize="12">No rhythm tonight</text></svg></div>;
   }
   const x0 = Math.min(...withCurve.map(p => Math.min(p.schedule!.precool, p.curve[0][0]))) - 900;
-  const x1 = Math.max(...withCurve.map(p => p.schedule!.end)) + 600;
+  const maxWake = Math.max(...withCurve.map(p => p.schedule!.wake));
+  const x1 = Math.max(...withCurve.map(p => Math.max(p.schedule!.end, p.schedule!.wake, p.curve[p.curve.length - 1][0]))) + 600;
   const vals = withCurve.flatMap(p => [...p.curve.map(c => c[1]), ...(p.night.target_c != null ? [p.night.target_c] : [])]);
   const lo = Math.min(...vals) - 1, hi = Math.max(...vals) + 1;
   const X = (t: number) => L + ((t - x0) / (x1 - x0)) * (W - L - R);
@@ -74,7 +75,16 @@ export default function Horizon({ people, now, tz, units, height = 150, gradient
   const hours: number[] = [];
   const start = new Date(x0 * 1000); start.setMinutes(0, 0, 0);
   for (let t = start.getTime() / 1000 + 3600; t < x1; t += 3600) hours.push(t);
-  const fmtH = (t: number) => new Date(t * 1000).toLocaleTimeString([], { ...h12(), hour: "numeric", timeZone: tz }).replace(" ", "").toLowerCase();
+  const ticks = hours.filter((_, i) => i % 2 === 0);
+  // Keep the time axis reaching tonight's wake (even when an even hour count drops the final hour or wake has :30).
+  if (!ticks.length || maxWake - ticks[ticks.length - 1] >= 45 * 60) ticks.push(maxWake);
+  else if (Math.abs(maxWake - ticks[ticks.length - 1]) >= 60) ticks[ticks.length - 1] = maxWake;
+  const fmtH = (t: number) => {
+    const d = new Date(t * 1000);
+    const base: Intl.DateTimeFormatOptions = { ...h12(), hour: "numeric", timeZone: tz };
+    const min = new Intl.DateTimeFormat([], { ...base, minute: "2-digit" }).formatToParts(d).find(p => p.type === "minute")?.value;
+    return d.toLocaleTimeString([], min && min !== "00" ? { ...base, minute: "2-digit" } : base).replace(" ", "").toLowerCase();
+  };
   const single = withCurve.length === 1;
   const fs = realSize ? 10 : Math.round(9 * Math.max(1, W / 480));
   const deg = (c: number, d = 0) => `${(units === "F" ? cToF(c) : c).toFixed(d)}°`;
@@ -111,9 +121,10 @@ export default function Horizon({ people, now, tz, units, height = 150, gradient
             <stop offset="1" stopColor="var(--warm)" />
           </linearGradient>
         </defs>
-        {!compact && hours.filter((_, i) => i % 2 === 0).map(t => (
-          <text key={t} x={X(t)} y={H - 5} textAnchor="middle" fontSize={fs} fill="var(--mute)">{fmtH(t)}</text>
-        ))}
+        {!compact && ticks.map(t => {
+          const tx = X(t);
+          return <text key={t} x={tx} y={H - 5} textAnchor={tx > W - 26 ? "end" : tx < 22 ? "start" : "middle"} fontSize={fs} fill="var(--mute)">{fmtH(t)}</text>;
+        })}
         {withCurve.map(p => {
           const pts = p.curve.map(([t, v]) => [X(t), Y(v)] as [number, number]);
           const past = pts.filter((_, i) => p.curve[i][0] <= now);

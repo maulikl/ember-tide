@@ -8,7 +8,7 @@ import ShowMore from "../components/ShowMore";
 import Horizon from "../components/Horizon";
 import { useApp } from "../ctx";
 import { useAuth } from "../auth";
-import { clock, cToF, eventText, personaColor, sourceText, STATE_TEXT, temp, weight, weightUnit, h12 } from "../format";
+import { clock, cToF, eventText, personaColor, sourceText, STATE_TEXT, temp, wakeSourceText, weight, weightUnit, h12 } from "../format";
 import type { EventRow, UpdateInfo } from "../types";
 import Access from "./Access";
 import Autopilot from "./Autopilot";
@@ -166,7 +166,10 @@ function Overview() {
                   {p.presence.present ? "In bed" : p.presence.present === false ? "Not in bed" : "Not sure if in bed"}
                   {p.presence.stale ? <span className="mute"> · bed sensor quiet</span> : p.presence.echo ? <span className="mute"> · ignored a reading from the other side</span> : null}</span>
                 {(p.presence.hr != null || p.presence.br != null) && <span className="num mute">{p.presence.hr ?? "—"} bpm · {p.presence.br ?? "—"} breaths/min</span>}</div>
-              {p.schedule && <div className="row mute" style={{ fontSize: 12.5 }}><span title={`Pre-conditioning can run ${clock(p.schedule.window_start, snap.tz)}–${clock(p.schedule.window_end, snap.tz)}`}>Bedtime {clock(p.schedule.bedtime, snap.tz)}</span><span>Wake {clock(p.schedule.wake, snap.tz)}</span></div>}
+              {p.schedule && (() => {
+                const src = wakeSourceText(p.schedule.wake_source);
+                return <div className="row mute" style={{ fontSize: 12.5 }}><span title={`Pre-conditioning can run ${clock(p.schedule.window_start, snap.tz)}–${clock(p.schedule.window_end, snap.tz)}`}>Bedtime {clock(p.schedule.bedtime, snap.tz)}</span><span>Wake {clock(p.schedule.wake, snap.tz)}{src ? ` · ${src}` : ""}</span></div>;
+              })()}
             </div>
           ))}
         </div>

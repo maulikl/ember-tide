@@ -71,6 +71,7 @@ class AwayBody(BaseModel):
 class ContextBody(BaseModel):
     home: bool | None = None
     wake: float | None = None     # unix seconds, e.g. from a phone alarm
+    wake_source: Literal["calendar", "hand"] | None = None
 
 
 class SimBody(BaseModel):
@@ -302,6 +303,7 @@ def build_router(app_state) -> APIRouter:
                 raise HTTPException(422, "wake time must be within the next 24 hours")
             st = ctl().engine_for(pid).s
             st.wake_override, st.wake_by_hand = b.wake, True       # by hand: the phone's alarm no longer moves it
+            st.wake_from_alarm, st.wake_source = None, b.wake_source or "hand"
         return await refresh(pid)
 
     @r.post("/people/{pid}/away")
@@ -493,11 +495,17 @@ def build_router(app_state) -> APIRouter:
     # ---------- nights (Sleep screen) ----------
     @r.get("/people/{pid}/nights")
     async def nights(pid: str, count: int = 7):
+        from .engine.away import hide_away_night
+        from .engine.compare import lean_summary
         from .engine.summary import recent
         c = ctl()
-        from .engine.away import hide_away_night
+        p = find(pid)
         now = c.clock.now_ts()
-        return [hide_away_night(c.store, pid, n, now, c.clock.tz) for n in recent(c.store, find(pid), c.clock.tz, now, max(1, min(30, count)))]
+        out = []
+        for s in recent(c.store, p, c.clock.tz, now, max(1, min(30, count))):
+            n = hide_away_night(c.store, pid, s, now, c.clock.tz)
+            out.append(lean_summary(c.store, p, n, c.clock.tz, now) if n is s else n)
+        return out
 
     @r.get("/people/{pid}/night")
     async def night(pid: str, date: str | None = None):

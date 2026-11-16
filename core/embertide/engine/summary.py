@@ -151,7 +151,9 @@ def _moments(events: list[dict], tz: ZoneInfo, phase_names: dict[str, str] | Non
                 continue
             out.append(m)
         elif k == "rhythm_started":
-            m = {"kind": k, "ts": e["ts"], "source": e.get("source")}
+            # placed at when they got in (the start is confirmed a few minutes later): so getting in a little before
+            # bedtime reads "got into bed 11:54" then "in bed early ... moved on at 12:00", not the other way round
+            m = {"kind": k, "ts": e.get("in_bed") or e["ts"], "source": e.get("source")}
             if e.get("fitted"):
                 m["fitted"] = True                        # a late start: the rhythm was squeezed to fit before the wake
                 m["text"] = "Later than usual: the rhythm was fitted into the time before your warm wake"
@@ -167,9 +169,7 @@ def _moments(events: list[dict], tz: ZoneInfo, phase_names: dict[str, str] | Non
                 out.append({"kind": k, "ts": e["ts"], "text": e.get("text"), "phase": e.get("phase"), "source": "system"})
         elif k in ("tonight_skip", "tonight_end", "tonight_resume", "tonight_start_now", "tonight_pause", "rhythm_changed", "adjust_cleared"):
             out.append({"kind": k, "ts": e["ts"], "source": e.get("source")})
-    if pm:
-        out = sorted(out + pm, key=lambda m: m["ts"])
-    return out
+    return sorted(out + pm, key=lambda m: (m["ts"], 1 if m["kind"] == "sleep" else 0))
 
 
 def household_pets(store: Store) -> list[dict]:
@@ -399,7 +399,7 @@ def _summarize(store: Store, person: Person, d: date, tz: ZoneInfo, now: float, 
         moments.append({"kind": "out_of_bed", "ts": g["from"], "minutes": g["minutes"]})
     for a, b in act:
         moments.append({"kind": "active", "ts": a, "end": b, "minutes": max(1, round((b - a) / 60)), "text": ACTIVE_TEXT})
-    moments.sort(key=lambda m: m["ts"])
+    moments.sort(key=lambda m: (m["ts"], 1 if m["kind"] == "sleep" else 0))
     out = {
         **base, "has_data": True,
         "in_bed_at": first_in, "out_at": last_out, "in_bed_min": round(in_bed_s / 60),

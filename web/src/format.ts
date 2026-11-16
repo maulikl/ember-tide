@@ -113,7 +113,15 @@ export function contextText(n: NightView, now: number, tz: string): string | nul
   if (n.state === "away") return n.away ? null : "Not home yet · pre-condition waits";
   const until = c.event_end ?? c.busy_until;
   if (until && until > now) return `Out until ${clock(until, tz)}`;
-  if (c.early_start && c.early_start > now) return `Early start tomorrow · ${clock(c.early_start, tz)}`;
+  if (c.early_start && c.early_start > now) return `Early start tomorrow · ${clock(c.early_start, tz)} · from your calendar`;
+  return null;
+}
+
+/** Short calm note saying why tonight's wake moved from the usual rhythm, or null when it matches. */
+export function wakeSourceText(src?: "alarm" | "calendar" | "hand" | null): string | null {
+  if (src === "alarm") return "from your alarm";
+  if (src === "calendar") return "from your calendar";
+  if (src === "hand") return "set by hand";
   return null;
 }
 

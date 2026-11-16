@@ -10,7 +10,7 @@ import { useOwnPerson } from "../auth";
 import { clock, cToF, sourceText, weight, weightUnit, h12 } from "../format";
 
 export interface Series { id: string; label: string; source: string; device: string; driver: string; unit: string; lane: string; kind: "line" | "step"; color: string; points: [number, number][]; role?: string; ghost?: boolean }
-interface Moment { kind: string; ts: number; end?: number; count?: number; delta_c?: number; temp_c?: number | null; minutes?: number; extended?: number; source?: string | null; home?: boolean | null; why?: string; text?: string }
+interface Moment { kind: string; ts: number; end?: number; corrected?: boolean; count?: number; delta_c?: number; temp_c?: number | null; minutes?: number; extended?: number; source?: string | null; home?: boolean | null; why?: string; text?: string }
 interface StageSrc { id: string; label: string; kind: string; segments: { start: number; end: number; stage: string }[]; totals: Record<string, number>; agree_with_first?: number | null }
 const STAGE_COLOR: Record<string, string> = { awake: "#e3b37a", rem: "#a08be2", light: "#7fb6cc", deep: "#3f6fb5" };
 const STAGE_LV = ["awake", "rem", "light", "deep"];
@@ -33,13 +33,13 @@ function deviceLine(device: string, driver: string): string {
   const dn = driverName(driver);
   return device.toLowerCase().includes(dn.toLowerCase().split(" ")[0]) ? device : `${device} · ${dn}`;
 }
-const MOMENT_GLYPH: Record<string, string> = { hot_flash: "❄", cold_flash: "☼", adjust: "±", rhythm_started: "◐", out_of_bed: "○", tonight_skip: "○", tonight_pause: "‖", rhythm_changed: "✎", adjust_cleared: "↺", tonight_start_now: "▸", home_changed: "⌂", pet: "∴", active: "·" };
+const MOMENT_GLYPH: Record<string, string> = { hot_flash: "❄", cold_flash: "☼", adjust: "±", rhythm_started: "◐", rhythm_restarted: "◐", sleep: "◑", out_of_bed: "○", tonight_skip: "○", tonight_end: "▪", tonight_resume: "▸", tonight_pause: "‖", rhythm_changed: "✎", adjust_cleared: "↺", tonight_start_now: "▸", home_changed: "⌂", pet: "∴", active: "·", room_cold: "❄", corrected_stretch: "✎" };
 function momentLabel(m: Moment): string {
   if (m.kind === "home_changed") return `${m.home === false ? "Left home" : m.home === true ? "Back home" : "Home or away not known"}${m.why ? ` (${m.why})` : ""}`;
-  if (m.kind === "pet" || m.kind === "active" || m.kind === "room_cold") return m.text ?? (m.kind === "pet" ? "Looked like a pet" : m.kind === "active" ? "Active, not sleeping yet" : "The room was cold");
-  return MOMENT_TEXT[m.kind] ?? m.kind.replace(/_/g, " ");
+  if (m.kind === "pet" || m.kind === "active" || m.kind === "room_cold" || m.kind === "corrected_stretch") return m.text ?? MOMENT_TEXT[m.kind] ?? m.kind.replace(/_/g, " ");
+  return MOMENT_TEXT[m.kind] ?? m.text ?? m.kind.replace(/_/g, " ");
 }
-const MOMENT_TEXT: Record<string, string> = { hot_flash: "Hot flash", cold_flash: "Cold flash", adjust: "Manual change", rhythm_started: "Rhythm started (in bed)", out_of_bed: "Out of bed", tonight_skip: "Turned off for the night", tonight_pause: "Paused", rhythm_changed: "Rhythm edited", adjust_cleared: "Back to rhythm", tonight_start_now: "Started manually", home_changed: "Home / away" };
+const MOMENT_TEXT: Record<string, string> = { hot_flash: "Hot flash", cold_flash: "Cold flash", adjust: "Manual change", rhythm_started: "Rhythm started (in bed)", rhythm_restarted: "Started again", sleep: "Night timed from here", out_of_bed: "Out of bed", tonight_skip: "Turned off for the night", tonight_end: "Ended for the night", tonight_resume: "Resumed", tonight_pause: "Paused", rhythm_changed: "Rhythm edited", adjust_cleared: "Back to rhythm", tonight_start_now: "Started manually", home_changed: "Home / away", room_cold: "The room was cold", pet: "Looked like a pet", active: "Active, not sleeping yet", corrected_stretch: "Marked a stretch" };
 
 /** How long a silence still counts as "the same line": 3x the series' usual reporting interval, at least 5 min.
  *  Sensors that report every 10-15 minutes (many room sensors) would otherwise never draw a line. */
@@ -398,12 +398,12 @@ export default function Explorer() {
       {naps.list.length > 0 && <NapsCard naps={naps.list} nightMin={naps.night} />}
       <Sleep14 person={person.id} />
       <NightFix key={`${person.id}:${data.date}`} person={person.id} date={data.date} tz={data.tz} pets={pets}
-        ups={data.moments.filter(m => m.kind === "out_of_bed").map(m => ({ ts: m.ts, minutes: m.minutes }))}
+        ups={data.moments.filter(m => m.kind === "out_of_bed" && !m.corrected).map(m => ({ ts: m.ts, minutes: m.minutes }))}
         onChanged={() => setBump(b => b + 1)} />
-      <PetQuestions person={person.id} tz={data.tz} />
+      <PetQuestions person={person.id} tz={data.tz} start={data.start} end={data.end} />
       <div className="box"><span className="k">Moments · click to zoom</span>
         <div className="moments" style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-          <ShowMore items={data.moments} limit={12} noun="moments" render={shown => shown.map((m, i) => <button key={i} className="pill" onClick={() => setZoom([m.ts - 1800, m.ts + 2400])}>
+          <ShowMore items={[...data.moments].sort((a, b) => a.ts - b.ts || (a.kind === "sleep" ? 1 : 0) - (b.kind === "sleep" ? 1 : 0))} limit={12} noun="moments" render={shown => shown.map((m, i) => <button key={i} className="pill" title={m.text} onClick={() => setZoom([m.ts - 1800, m.ts + 2400])}>
             {MOMENT_GLYPH[m.kind]} {clock(m.ts, data.tz)} · {momentLabel(m)}{m.minutes ? `${m.kind === "pet" ? " · for" : ""} ${Math.round(m.minutes)} min` : ""}{m.count && m.count > 1 ? ` ×${m.count}` : ""}</button>)} />
           {!data.moments.length && <span className="mute">Nothing happened this night: no flashes, changes or trips out of bed.</span>}
         </div>

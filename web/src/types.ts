@@ -42,7 +42,7 @@ export interface PersonView {
   night: NightView;
   bed: { on: boolean | null; setpoint_c: number | null; measured_c: number | null };
   presence: { present: boolean | null; fusion: { present: boolean | null; score: number | null; votes: { signal: string; weight: number; value: number }[] } | null; bed_present: boolean | null; starts_in_s: number | null; occupied: boolean | null; since: number | null; echo: boolean; stale: boolean; hr: number | null; br: number | null; status: number | null; status_text: string | null };
-  schedule: { bedtime: number; precool: number; window_start: number; window_end: number; wake: number; end: number; rhythm_id: string } | null;
+  schedule: { bedtime: number; precool: number; window_start: number; window_end: number; wake: number; end: number; rhythm_id: string; wake_source?: "alarm" | "calendar" | "hand" | null } | null;
   phases: PhaseView[];
   next: { phase: string; name: string; at: number; temp_c: number | null; when_settled?: boolean } | null;
   curve: [number, number][];

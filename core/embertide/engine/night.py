@@ -51,6 +51,7 @@ class NightState:
     wake_override: float | None = None
     wake_by_hand: bool = False           # set from the app ("wake me at"): the phone's alarm doesn't move it
     wake_from_alarm: float | None = None # the alarm the wake currently follows
+    wake_source: str | None = None       # "calendar" or "hand" when overridden in context
     home: bool | None = None
     flash: Flash | None = None
     override: Override | None = None
@@ -229,7 +230,7 @@ class NightEngine:
         if alarm is None:
             fa = self.s.wake_from_alarm
             if reported and fa and now < fa and self.s.wake_override == fa:
-                self.s.wake_override, self.s.wake_from_alarm = None, None
+                self.s.wake_override, self.s.wake_from_alarm, self.s.wake_source = None, None, None
                 self._ev(now, "wake_alarm_cleared", was=fa, reason="no alarm")
                 return True
             return False
@@ -245,7 +246,7 @@ class NightEngine:
             # (a 3 AM reminder) means nothing about the morning one, which is still set.
             fa = self.s.wake_from_alarm
             if fa and now < fa < alarm and self.s.wake_override == fa:
-                self.s.wake_override, self.s.wake_from_alarm = None, None
+                self.s.wake_override, self.s.wake_from_alarm, self.s.wake_source = None, None, None
                 self._ev(now, "wake_alarm_cleared", was=fa, planned=planned)
                 return True
             return False
@@ -259,7 +260,7 @@ class NightEngine:
             # the followed alarm already rang and the next one is a few minutes after it: a snooze. The wake holds
             # at the time the alarm first rang (a reset alarm well after it is a real change of plan and is followed)
             return False
-        self.s.wake_override, self.s.wake_from_alarm = alarm, alarm
+        self.s.wake_override, self.s.wake_from_alarm, self.s.wake_source = alarm, alarm, None
         self._ev(now, "wake_from_alarm", wake=alarm, planned=planned)
         return True
 

@@ -494,3 +494,19 @@ def test_resume_after_the_out_of_bed_hold_turns_the_side_back_on():
     e.tonight(t2 + 200, "resume")
     e.tick(t2 + 300, False)
     assert e.tick(t2 + 300 + 31 * 60, False) is None and e.s.state == "out_of_bed"
+
+
+def test_got_into_bed_reads_before_in_bed_early_when_the_start_is_confirmed_after_bedtime():
+    # 2026-11-15: in bed 23:54, start confirmed 00:01, bedtime 00:00: the moments read "12:00 In bed early" before
+    # "12:01 Got into bed". Getting in is placed at when they got in, and everything is in time order
+    from embertide.engine.summary import _moments
+    bt = ts("2026-11-06T00:00")
+    evs = [
+        {"kind": "hot_flash", "ts": ts("2026-11-06T02:00")},
+        {"kind": "sleep_anchor", "ts": ts("2026-11-06T00:01"), "at": bt, "why": "bedtime", "bedtime": bt},
+        {"kind": "rhythm_started", "ts": ts("2026-11-06T00:01"), "in_bed": ts("2026-11-05T23:54")},
+        {"kind": "cold_flash", "ts": ts("2026-11-06T01:00")},
+    ]
+    moms = _moments(evs, TZ, clock="12")
+    assert [m["kind"] for m in moms] == ["rhythm_started", "sleep", "cold_flash", "hot_flash"]
+    assert moms[0]["ts"] == ts("2026-11-05T23:54")

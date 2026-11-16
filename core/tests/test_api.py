@@ -229,3 +229,85 @@ def test_show_ask_setting_default_and_patch(tmp_path):
         assert r2.status_code == 200
         assert r2.json()["people"][0]["settings"]["show_ask"] is True
         assert c.get("/api/household").json()["people"][0]["settings"]["show_ask"] is True
+
+
+def test_nights_week_bars_agree_with_night_summary_and_explore_moments(tmp_path):
+    from datetime import datetime, timedelta
+
+    with client(tmp_path) as c:
+        ctl = c.app.state.et_state.controller
+        tz = ctl.clock.tz
+        c.post("/api/sim", json={"jump_to": "2026-11-06T14:00"})
+        p1 = ctl.household.people[0]
+        base = datetime(2026, 11, 5, 23, 20, tzinfo=tz)
+        rows = []
+        # Bed sees 23:20..06:30 with a 40-min out-of-bed gap at 01:00..01:40; watch sees 23:30..06:20.
+        for m in range(7 * 60 + 11):
+            t = (base + timedelta(minutes=m)).timestamp()
+            occ = 0 if 100 <= m < 140 else 1
+            rows.append((t, p1.zone, 1, 19.0, 19.0, occ, 60 if occ else None, 14 if occ else None, 0 if occ else None, 19.0, "deep", occ, p1.id))
+        ctl.store.telemetry(rows)
+        t_start = (base + timedelta(minutes=1)).timestamp()
+        ctl.store.event(t_start, "rhythm_started", person=p1.id)
+        t_w0 = (base + timedelta(minutes=10)).timestamp()
+        t_w_asleep = (base + timedelta(minutes=25)).timestamp()
+        t_w_woke = (base + timedelta(minutes=415)).timestamp()
+        t_w_end = (base + timedelta(minutes=420)).timestamp()
+        ctl.store.put_stages(
+            p1.id, "watch", "Watch",
+            [
+                {"start": t_w0, "end": t_w_asleep, "stage": "awake"},
+                {"start": t_w_asleep, "end": t_w_woke, "stage": "light"},
+                {"start": t_w_woke, "end": t_w_end, "stage": "awake"},
+            ],
+            t_w0, t_w_end,
+        )
+
+        night = c.get("/api/people/p1/night?date=2026-11-05").json()
+        nights = c.get("/api/people/p1/nights?count=7").json()
+        bar = next(x for x in nights if x["date"] == "2026-11-05")
+        assert bar["in_bed_min"] == night["in_bed_min"]
+        assert bar["in_bed_min"] != night["bed_times"]["in_bed_min"]
+        assert bar["in_bed_at"] == night["in_bed_at"]
+        assert bar["out_at"] == night["out_at"]
+        assert bar["settled_min"] == night["settled_min"]
+        assert any("Watch: up" in line and "Bed: up" in line for line in night["compare"]["lines"])
+        assert any("got-up time" in u.lower() for u in night["compare"]["using"])
+
+        explore = c.get("/api/explore?person_id=p1&date=2026-11-05").json()
+        assert [m["kind"] for m in explore["moments"]] == [m["kind"] for m in night["moments"]]
+        assert [m["ts"] for m in explore["moments"]] == sorted(m["ts"] for m in explore["moments"])
+        assert any(m["kind"] == "out_of_bed" and m["minutes"] >= 39 for m in explore["moments"])
+
+
+def test_snapshot_schedule_reports_wake_source(tmp_path):
+    import time as _t
+
+    def source_after(c, want, tries=40):
+        """The new wake applies on the controller's next tick: wait for it (a few seconds at most)."""
+        got = None
+        for _ in range(tries):
+            got = c.get("/api/snapshot").json()["people"][0]["schedule"]["wake_source"]
+            if got == want:
+                return got
+            _t.sleep(0.15)
+        return got
+
+    with client(tmp_path) as c:
+        ctl = c.app.state.et_state.controller
+        c.post("/api/sim", json={"jump_to": "2026-11-05T21:00"})
+        snap0 = c.get("/api/snapshot").json()
+        p1_sched = snap0["people"][0]["schedule"]
+        assert p1_sched["wake_source"] is None
+
+        alarm_ts = p1_sched["wake"] + 30 * 60
+        ctl.engines["p1"].follow_alarm(ctl.clock.now_ts(), alarm_ts, reported=True)
+        assert source_after(c, "alarm") == "alarm"
+
+        cal_ts = p1_sched["wake"] - 45 * 60
+        c.post("/api/people/p1/context", json={"wake": cal_ts, "wake_source": "calendar"})
+        assert source_after(c, "calendar") == "calendar"
+
+        hand_ts = p1_sched["wake"] - 20 * 60
+        c.post("/api/people/p1/context", json={"wake": hand_ts})
+        assert source_after(c, "hand") == "hand"

@@ -15,7 +15,7 @@ minutes after the correction or the watch, later nights' chosen times allow for 
 from __future__ import annotations
 
 import statistics
-from datetime import datetime
+from datetime import date, datetime
 from ..units import clock_style, fmt_clock
 
 PREFER = {"wearable": (0.8, 1.25), "balanced": (1.0, 1.0), "bed": (1.25, 0.8)}   # (bed, wearable) multipliers
@@ -304,26 +304,56 @@ def asleep_away_first(rows: list[dict], wear: dict | None, bed: dict) -> tuple[f
     return None
 
 
-def compare_night(controller, p, d: str) -> dict:
-    """The bed's night next to the wearable's: times, wake-ups, stages, heart rate; where they disagree; what's used."""
-    from datetime import date as _date
-    from .stages import agreement, estimate
-    from .summary import night_window, summarize
-    store, tz, now = controller.store, controller.clock.tz, controller.clock.now_ts()
-    ck = clock_style(p.settings)
-    dd = _date.fromisoformat(d)
-    win = night_window(p, dd, tz, now)
+def _times_context(store, p, dd: date, tz, now: float) -> dict | None:
+    """Shared chosen-times context for compare_night() and lean_summary() (/nights)."""
+    from . import summary as _summary
+    win = _summary.night_window(p, dd, tz, now)
     if not win:
-        return {"date": d, "available": False}
+        return None
     start, end = win
-    bed = summarize(store, p, dd, tz, now, raw=True) or {}
+    bed = _summary.summarize(store, p, dd, tz, now, raw=True) or {}
     wear = wearable_night(store, p, start - 2 * 3600, end + 2 * 3600)
-    fix = get_fix(store, p.id, d)
+    fix = get_fix(store, p.id, dd.isoformat())
     trust = getattr(p.settings.autopilot, "trust_more", "wearable")
     off = offset(store, p.id)
+    times = chosen_times(bed, wear, fix, trust, off)
+    rows = store.history(p.zone, start, end, person=p.id)
+    away_first = asleep_away_first(rows, wear, bed)
+    if away_first and not (fix or {}).get("in_bed_at"):
+        times["in_bed_at"] = {"ts": bed["in_bed_at"], "source": "bed"}     # in bed is when the BED saw them
+    return {"win": win, "bed": bed, "wear": wear, "fix": fix, "trust": trust, "off": off,
+            "times": times, "rows": rows, "away_first": away_first}
+
+
+def lean_summary(store, p, s: dict, tz, now: float) -> dict:
+    """Apply the person's "Which to trust more" times and duration to a /nights list entry so week bars match /night."""
+    if not s or not s.get("has_data") or s.get("away"):
+        return s
+    from .stages import collect
+    ctx = _times_context(store, p, date.fromisoformat(s["date"]), tz, now)
+    if not ctx:
+        return s
+    cmp = {"available": True, "has_wearable": bool(ctx["wear"]), "trust": ctx["trust"], "times": ctx["times"]}
+    st = collect(store, p, *ctx["win"])
+    stages = st[0] if st else None
+    if st and ctx["trust"] == "bed":
+        stages = next((x for x in st if x["kind"] == "estimate"), stages)
+    return lean_on(s, cmp, stages, now)
+
+
+def compare_night(controller, p, d: str) -> dict:
+    """The bed's night next to the wearable's: times, wake-ups, stages, heart rate; where they disagree; what's used."""
+    from .stages import agreement, estimate
+    store, tz, now = controller.store, controller.clock.tz, controller.clock.now_ts()
+    ck = clock_style(p.settings)
+    ctx = _times_context(store, p, date.fromisoformat(d), tz, now)
+    if not ctx:
+        return {"date": d, "available": False}
+    start, end = ctx["win"]
+    bed, wear, fix, trust, off = ctx["bed"], ctx["wear"], ctx["fix"], ctx["trust"], ctx["off"]
+    rows, away_first = ctx["rows"], ctx["away_first"]
     out = {"date": d, "available": True, "trust": trust, "has_wearable": bool(wear), "corrected": bool(fix),
            "fix": fix, "offset": off}
-    rows = store.history(p.zone, start, end, person=p.id)
     est = estimate(rows)
     lines, disagree = [], []
 
@@ -343,7 +373,6 @@ def compare_night(controller, p, d: str) -> dict:
     kind = device_kind(f"{wear['source']} {wear['label']}") if wear else "watch"
     wear_name = {"ring": "Ring", "band": "Band"}.get(kind, "Watch")
     out["wearable_name"] = wear_name if wear else None
-    away_first = asleep_away_first(rows, wear, bed)
     if wear:
         if away_first:
             lines.append(f"{wear_name}: asleep away from the bed {_clock(away_first[0], tz, ck)}–{_clock(away_first[1], tz, ck)}, "
@@ -351,7 +380,11 @@ def compare_night(controller, p, d: str) -> dict:
         else:
             pair("in bed", "in bed", wear["start"], bed.get("in_bed_at"), "Got into bed")
             pair("asleep", "settled", wear["asleep_at"], bed.get("fell_asleep_est"), "Fell asleep")
-        pair("awake", "up", wear["woke_at"], bed.get("out_at"), "Woke")
+        if wear["woke_at"] and wear["end"] and wear["end"] - wear["woke_at"] > 60:
+            lines.append(f"{wear_name}: awake {_clock(wear['woke_at'], tz, ck)}")
+            pair("up", "up", wear["end"], bed.get("out_at"), "Got up")
+        else:
+            pair("awake", "up", wear["woke_at"], bed.get("out_at"), "Woke")
         if (bed.get("times_up") or 0) != wear["wake_ups"]:
             lines.append(f"Wake-ups · {wear_name}: {wear['wake_ups']} · Bed: up {bed.get('times_up') or 0}×")
         # stages: wearable asleep/awake vs the bed's settled/restless estimate, minute by minute
@@ -395,10 +428,8 @@ def compare_night(controller, p, d: str) -> dict:
     out["not_worn"] = not_worn_devices(controller, p, start, end)
     for name in out["not_worn"]:
         lines.append(f"{name}: the heart rate hardly changed, so it was probably not being worn. Not used for this comparison")
-    out["times"] = chosen_times(bed, wear, fix, trust, off)
+    out["times"] = ctx["times"]
     out["away_first"] = {"from": away_first[0], "to": away_first[1]} if away_first else None
-    if away_first and not (fix or {}).get("in_bed_at"):
-        out["times"]["in_bed_at"] = {"ts": bed["in_bed_at"], "source": "bed"}     # in bed is when the BED saw them
     out["lines"] = lines
     out["disagree"] = disagree
     src_label = {"watch": f"your {(wear_name or 'watch').lower()}", "bed": "the bed", "both": "both", "you": "your correction",
@@ -408,9 +439,15 @@ def compare_night(controller, p, d: str) -> dict:
         using.append(f"Using your {wear_name.lower()} for stages")
     elif est:
         using.append("Using the bed for stages")
-    t = out["times"].get("in_bed_at")
-    if t:
-        using.append(f"In-bed time from {src_label.get(t['source'], t['source'])}")
+    t_in, t_out = out["times"].get("in_bed_at"), out["times"].get("out_at")
+    if t_in and t_out:
+        s_in, s_out = src_label.get(t_in["source"], t_in["source"]), src_label.get(t_out["source"], t_out["source"])
+        using.append(f"In-bed and got-up times from {s_in}" if s_in == s_out
+                     else f"In-bed time from {s_in} · got-up time from {s_out}")
+    elif t_in:
+        using.append(f"In-bed time from {src_label.get(t_in['source'], t_in['source'])}")
+    elif t_out:
+        using.append(f"Got-up time from {src_label.get(t_out['source'], t_out['source'])}")
     if out["devices"]:
         using.append("Readings from " + " and ".join(d["name"] for d in out["devices"]))
     if fix:

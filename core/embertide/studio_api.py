@@ -497,12 +497,15 @@ def build_studio_router(state) -> APIRouter:
         rh = pick_rhythm(p.rhythms, d)
         n = resolve(rh, d, tz) if rh else None
         from .engine.stages import collect
+        from .engine.summary import summarize
         await _maybe_fetch_orion(p, d, win)
         stages = collect(c.store, p, start, end)
+        s = summarize(c.store, p, d, tz, now)
+        moments = s["moments"] if s else _moments(events, tz, zone=p.zone, pets=household_pets(c.store), until=end)
         return {"date": d.isoformat(), "start": start, "end": end, "now": now, "tz": str(tz), "person": p.id, "zone": p.zone, "stages": stages,
-                "series": out, "moments": _moments(events, tz, zone=p.zone, pets=household_pets(c.store), until=end),
+                "series": out, "moments": moments,
                 "phases": [{"id": ph.id, "name": ph.name, "start": ph.start, "temp_c": ph.temp_c} for ph in (n.phases if n else [])],
-                "schedule": {"bedtime": n.bedtime, "wake": n.wake, "window_start": n.window_start, "window_end": n.window_end} if n else None}
+                "schedule": {"bedtime": n.bedtime, "precool": n.precool if hasattr(n, "precool") else n.window_start, "wake": n.wake, "window_start": n.window_start, "window_end": n.window_end} if n else None}
 
     @r.get("/people/{pid}/stages")
     async def get_stages(pid: str, date: str | None = None):

@@ -1266,9 +1266,29 @@ class Controller:
                     hist = self.store.history(p.zone, since=n.precool - 3600, step_s=step, person=p.id)
                     actual = [[round(h["ts"]), round(h["measured"], 2)] for h in hist if h["measured"] is not None]
                     self._actual_cache[p.id] = (key, actual)
-            from .rhythm import curve
+            from .rhythm import curve, local_ts
             f = e.s.flash
             o = e.s.override
+            ctx = None if p.zone in self.household.guest else self.context.get(p.id)
+            wake_source = None
+            if n:
+                rh = next((r for r in p.rhythms if r.id == n.rhythm_id), None)
+                planned_wake = local_ts(n.date, rh.schedule.wake, self.clock.tz) if rh else n.wake
+                if abs(n.wake - planned_wake) >= 60:
+                    early = ctx.get("early_start") if isinstance(ctx, dict) else None
+                    if e.s.wake_override is not None and abs(e.s.wake_override - n.wake) < 60:
+                        if e.s.wake_source in ("calendar", "hand"):
+                            wake_source = e.s.wake_source
+                        elif e.s.wake_from_alarm is not None and abs(e.s.wake_from_alarm - n.wake) < 60 and not e.s.wake_by_hand:
+                            wake_source = "alarm"
+                        elif early and abs((early - 45 * 60) - n.wake) < 60:
+                            wake_source = "calendar"
+                        elif e.s.wake_by_hand:
+                            wake_source = "hand"
+                    elif e.s.wake_from_alarm is not None and abs(e.s.wake_from_alarm - n.wake) < 60:
+                        wake_source = "alarm"
+                    elif e.s.wake_by_hand:
+                        wake_source = "hand"
             people.append({
                 "id": p.id, "name": p.name, "persona": p.persona, "zone": p.zone,
                 "settings": p.settings.model_dump(),
@@ -1295,7 +1315,8 @@ class Controller:
                              "hr": s.hr if s else None, "br": s.br if s else None, "status": s.status if s else None,
                              "status_text": STATUS_TEXT.get(s.status, None) if s and s.status is not None else None},
                 "schedule": None if not n else {"bedtime": n.bedtime, "precool": n.precool, "window_start": n.window_start,
-                                                "window_end": n.window_end, "wake": n.wake, "end": n.end, "rhythm_id": n.rhythm_id},
+                                                "window_end": n.window_end, "wake": n.wake, "end": n.end, "rhythm_id": n.rhythm_id,
+                                                "wake_source": wake_source},
                 "phases": phases,
                 "next": e.next_info(now),
                 "curve": e.curve(n, 600) if n else [],
