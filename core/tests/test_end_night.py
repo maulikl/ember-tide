@@ -158,11 +158,11 @@ async def test_lie_in_unchanged_without_phone_or_watch(tmp_path):
     await n.step(2 * 2)                                                      # 2 min: still within the 3-min rule
     assert e.s.lie_in
     n.present("left", True)                                                  # something stays on the pad
-    await n.until(iso(end + 44 * 60))
-    assert e.s.lie_in and n.side("left").on                                  # until the cap, as today
-    await n.until(iso(end + 46 * 60))
+    await n.until(iso(end + 2 * 3600), dt=120)
+    assert e.s.lie_in and n.side("left").on                                  # still in bed: carries on
+    await n.until(iso(end + 4 * 3600 + 120), dt=120)
     assert e.s.state == "done"
-    assert _reason(n.events("lie_in_ended")[0]) == "cap"
+    assert _reason(n.events("lie_in_ended")[0]) == "cap"                     # the safety cap
 
 
 async def test_manual_adjust_in_inactive_states_never_keeps_bed_on(tmp_path):
