@@ -172,7 +172,7 @@ export default function Insights() {
           <label className="row" style={{ fontSize: 13, gap: 8, justifyContent: "flex-start", cursor: "pointer" }}>
             <input type="checkbox" checked={smallOn} onChange={e => setSmall(e.target.checked)} style={{ width: 22, height: 22 }} />
             <span>Let the assistant make small changes for me
-              <Tip text="Only on your own side, only when you ask: tonight up to 1.5 °C (about 3 °F) warmer or cooler in total, and starting or stopping a flash. Never your rhythm, Autopilot, notifications or turning the night off. Every change can be undone." /></span>
+              <Tip text={`Only on your own side, only when you ask: tonight up to ${u === "F" ? "3 °F" : "1.5 °C"} warmer or cooler in total, and starting or stopping a flash. Never your rhythm, Autopilot, notifications or turning the night off. Every change can be undone.`} /></span>
           </label>
           {!ai?.configured && <p className="faint" style={{ fontSize: 12 }}>To ask open questions with an AI model, connect one in <Link to="/studio/ai">Studio → AI model</Link>. Nothing leaves the house unless you choose a hosted provider.</p>}
           {ai?.configured && ai.local === false && <p className="faint" style={{ fontSize: 12 }}>Summaries sent for Ask go to {ai.preset_name ?? "the connected AI provider"} (<Link to="/studio/ai">Studio → AI model</Link>).</p>}

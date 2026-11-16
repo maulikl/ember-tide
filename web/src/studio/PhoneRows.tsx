@@ -2,6 +2,7 @@ import { useState } from "react";
 import { api } from "../api";
 import Tip from "../components/Tip";
 import type { PersonView, Snapshot } from "../types";
+import type { PhoneSource } from "../native";
 import type { Dial } from "./DialSetup";
 import { BRANDS } from "../wearables";
 import { sideWord } from "./deviceKinds";
@@ -13,9 +14,10 @@ import { sideWord } from "./deviceKinds";
 
 export interface PhoneRow { person: string; name: string; device: string | null; sharing: string[]; seen: number | null }
 
-const LABEL: Record<string, string> = {
+const LABEL: Record<PhoneSource, string> = {
   location: "home / away", wifi: "home Wi-Fi", calendar: "calendar times", alarm: "next alarm",
   charging: "charging and bedtime mode", watch: "watch connected", dial: "bedside dial nearby",
+  watch_hr: "watch heart rate at night", steps: "steps",
 };
 
 export const agoText = (s: number) => s < 90 ? "just now" : s < 5400 ? `${Math.round(s / 60)} min ago` : s < 172800 ? `${Math.round(s / 3600)} h ago` : `${Math.round(s / 86400)} days ago`;
@@ -41,7 +43,7 @@ export function PhoneLine({ r, snap, me, onChanged, say }: { r: PhoneRow; snap: 
   return <div className="devline"><div className="devline-main">
     <span className={`sdot ${stale ? "off" : "ok"}`} role="img" aria-label={stale ? "Quiet" : "Reporting"} />
     <span className="devline-id"><b>{title}</b>
-      <small className="faint">From this phone · {r.sharing.length ? `shares ${r.sharing.map(s => LABEL[s] ?? s).join(", ")}` : "shares nothing right now"}</small>
+      <small className="faint">From this phone · {r.sharing.length ? `shares ${r.sharing.map(s => (LABEL as Record<string, string>)[s] ?? s).join(", ")}` : "shares nothing right now"}</small>
       {r.sharing.includes("dial") && p && <small className="faint">{bedside ? "Near the dial at night · counts a little toward in bed" : `Near the ${sideWord(p.zone).toLowerCase()} dial at night, it counts a little toward in bed`}
         <Tip label="About the phone's bedside vote" text="With the phone charging or in bedtime mode at night, a short Bluetooth listen finds the bedside dial. A phone right by its owner's dial is a small (0.15) vote for in bed. It never votes for empty." /></small>}</span>
     <span className="devline-read"><span style={{ color: stale ? "var(--warn)" : undefined }}>{r.seen ? agoText(now - r.seen) : "not yet"}</span>

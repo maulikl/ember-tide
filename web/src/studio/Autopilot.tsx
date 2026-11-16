@@ -35,9 +35,15 @@ const METRIC: Record<string, string> = { hr: "heart rate", skin_temp: "skin temp
 function syncSummary(rows: ImportRow[], today: string): { what: string; notes: string[] } {
   const n = (x: number) => x.toLocaleString();
   const fresh = rows.filter(r => r.stored > 0), same = rows.filter(r => r.stored === 0 && (r.rejected.duplicate ?? 0) > 0);
+  const freshByLabel = new Map<string, number>();
+  for (const r of fresh) {
+    const label = METRIC[r.metric] ?? r.metric;
+    freshByLabel.set(label, (freshByLabel.get(label) ?? 0) + r.stored);
+  }
+  const sameLabels = [...new Set(same.map(r => METRIC[r.metric] ?? r.metric))];
   const parts: string[] = [];
-  if (fresh.length) parts.push(`New: ${fresh.map(r => `${n(r.stored)} ${METRIC[r.metric] ?? r.metric}`).join(", ")}`);
-  if (same.length) parts.push(`already had: ${same.map(r => METRIC[r.metric] ?? r.metric).join(", ")}`);
+  if (freshByLabel.size) parts.push(`New: ${[...freshByLabel].map(([label, count]) => `${n(count)} ${label}`).join(", ")}`);
+  if (sameLabels.length) parts.push(`already had: ${sameLabels.join(", ")}`);
   if (!parts.length) parts.push("Nothing new");
   const notes: string[] = [];
   for (const r of rows) {
@@ -297,7 +303,7 @@ export default function Autopilot() {
             <span className="k">What it watches</span>
             <div className="row"><span>Sensitivity<Tip label="What does sensitivity do?" text={TIPS.sensitivity} /></span><div className="seg" style={{ flex: "0 1 240px", minWidth: 0 }}>{(["low", "medium", "high"] as const).map(s => <button key={s} aria-pressed={pol.sensitivity === s} onClick={() => upd({ sensitivity: s })}>{s}</button>)}</div></div>
             <span className="k" style={{ marginTop: 6 }}>Signals it may use</span>
-            {meta.signals.map(s => <div className="row" key={s.id}><span style={{ fontSize: 13.5 }}>{s.label}{s.id === "skin_temp" && !st?.has_skin ? <small className="mute"> · no wearable data yet</small> : null}</span>
+            {meta.signals.map(s => <div className="row" key={s.id}><span style={{ fontSize: 13.5 }}>{s.label}{s.id === "skin_temp" && !st?.has_skin ? <small className="mute"> · no skin temperature yet</small> : null}</span>
               <input type="checkbox" className="toggle" checked={pol.signals.includes(s.id)} onChange={e => upd({ signals: e.target.checked ? [...pol.signals, s.id] : pol.signals.filter(x => x !== s.id) })} /></div>)}
             <div style={{ borderTop: "1px solid var(--line)", marginTop: 4 }}>
             <Fold id="studio.ap.trust" className="fold-sub" title="How much each source counts (trust)"

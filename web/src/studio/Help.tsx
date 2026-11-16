@@ -26,7 +26,7 @@ const SECTIONS: Section[] = [
       { term: "Warm wake", text: "The last half hour before your wake time: it warms gently so waking up feels easier." },
       { term: "Bedtime vs in bed", text: "Bedtime is when you usually go to bed; it times the pre-condition. The night itself starts when you actually get into bed (the bed's sensor sees you), so late nights just work." },
       { term: "Pre-condition", text: "The side gets to your first temperature before bedtime, so the bed is ready. If your phone shows you're out, it waits." },
-      { term: "Only start between", text: "Getting into bed only starts the night between Earliest and Latest, so an afternoon nap on the bed doesn't. Getting in later still works, up to an hour before wake." },
+      { term: "Only start between", text: "Getting into bed before Earliest start doesn't start the night, so an afternoon nap on the bed doesn't. An empty side stops cooling or warming after Keep pre-conditioning an empty side until, though getting into bed later still starts the night." },
       { term: "Out of bed", text: "Get up in the night and your side holds its temperature for a while (30 minutes by default), then turns off until you're back." },
       { term: "No sensor data", text: "If the bed can't tell whether you're in bed, the night starts on schedule 10 minutes after bedtime, unless your calendar says you're still out." },
     ],
@@ -34,13 +34,13 @@ const SECTIONS: Section[] = [
   {
     id: "tonight", title: "Tonight controls",
     items: [
-      { term: "Warmer / Cooler", text: "Nudges your side by 1° each press. By default it lasts until the next part of the night; tap “Changes last…” under the buttons to make it last the rest of the night. To change every night, edit your rhythm on the Rhythm tab." },
+      { term: "Warmer / Cooler", text: "Nudges your side by 1° each press. By default it lasts until the next phase; tap “Changes last until the next phase ⇄” under the buttons to switch it to “Changes last the rest of the night ⇄”. To change every night, edit your rhythm on the Rhythm tab." },
       { term: "Hot flash / Cold flash", text: "A quick blast of cold or warmth, 15 minutes by default, then it eases back to the plan. Press again for 5 more minutes, or stop it early. Change the defaults in Settings." },
       { term: "Pause", text: "Turns your side off for an hour, then it carries on." },
       { term: "Off tonight", text: "Turns your side off until tomorrow evening. Pressing + or − brings it back." },
       { term: "Turn on now", text: "Outside the night (a nap, an early night) you can turn your side on by hand with a timer. It turns off at the timer or when your rhythm starts." },
       { term: "Wake up earlier tonight", text: "Shows when your calendar has an early start tomorrow: moves tonight's warm wake so you wake up in time." },
-      { term: "Simple screen", text: "A big, dark, one-temperature screen for the middle of the night. It can switch on by itself once you're in bed." },
+      { term: "Night screen", text: "A big, dark, one-temperature screen for the middle of the night. It can switch on by itself once you're in bed." },
     ],
   },
   {

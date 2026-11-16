@@ -19,6 +19,7 @@ interface Night {
   coolest_c?: number | null; warmest_c?: number | null; hot_flashes?: number; cold_flashes?: number; adjustments?: number; moments: Moment[];
   series?: { ts: number; target: number | null; measured: number | null; hr: number | null; occupied: number }[];
   ring?: Ring | null; naps?: Nap[]; nap_min?: number; night_asleep_min?: number | null;
+  times_from?: string;
   stages?: StageSrc | null; stage_sources?: { id: string; label: string; kind: string }[];
 }
 interface StageSrc { id: string; label: string; kind: string; segments: { start: number; end: number; stage: string }[]; totals: Record<string, number>; agree_with_first?: number | null }
@@ -245,7 +246,7 @@ export default function SleepScreen() {
         <section className="tcol">
         <p className="sleep-story">{story(n, snap.tz)}</p>
         <div className="stats">
-          <div className="stat"><span className="v">{hm(n.settled_min)}</span><span className="l">asleep, about<Tip label="How this is worked out" text={`An estimate from the bed's sensors (how still you were and your heart rate), not a medical measurement.`} /></span></div>
+          <div className="stat"><span className="v">{hm(n.settled_min)}</span><span className="l">asleep, about<Tip label="How this is worked out" text={n.times_from === "watch" && n.stages?.kind === "wearable" && (n.stages.totals.light ?? 0) + (n.stages.totals.deep ?? 0) + (n.stages.totals.rem ?? 0) > 0 ? "From your watch or ring's sleep stages, not a medical measurement." : "An estimate from the bed's sensors (how still you were and your heart rate), not a medical measurement."} /></span></div>
           <div className="stat"><span className="v">{hm(n.time_to_settle_min)}</span><span className="l">to drift off</span></div>
           <div className="stat"><span className="v">{n.times_up ?? 0}</span><span className="l">times up{n.up_minutes ? ` · ${n.up_minutes} min in all` : ""}</span></div>
           <div className="stat"><span className="v">{n.hr_avg ?? "—"}</span><span className="l">heart rate, average{n.hr_low != null ? ` · lowest ${n.hr_low}` : ""}</span></div>
