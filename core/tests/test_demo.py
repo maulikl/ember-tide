@@ -176,8 +176,14 @@ def test_demo_allows_interactive_controls_and_resets_state(tmp_path: Path):
         after_alex = next(p for p in after_snap["people"] if p["id"] == "p1")
         assert after_alex["settings"]["units"] == "F"
         assert c.get("/api/people/p1/rhythms").json()[0]["name"] == orig_rhythm["name"]
-        assert abs(after_alex["night"]["target_c"] - orig_target) < 0.05
-        assert after_alex["night"]["state"] == orig_alex["night"]["state"]
+        # a reset is a fresh start: compare with a demo started right now (not with the first snapshot, which a script
+        # moved on in the meantime; late in the evening a fresh night can already be past its start window, 2026-11-16)
+        with TestClient(_demo_app(tmp_path / "fresh")) as fresh:
+            ref = next(p for p in fresh.get("/api/snapshot").json()["people"] if p["id"] == "p1")
+        assert after_alex["night"]["state"] == ref["night"]["state"]
+        assert (after_alex["night"]["target_c"] is None) == (ref["night"]["target_c"] is None)
+        if ref["night"]["target_c"] is not None:
+            assert abs(after_alex["night"]["target_c"] - ref["night"]["target_c"]) < 0.05
         assert c.get("/api/pets").json()["pets"][0]["name"] == "Milo"
         assert len(c.get("/api/people/p1/nights?count=10").json()) >= 7
 
