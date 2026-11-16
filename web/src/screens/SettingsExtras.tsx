@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api, isApp } from "../api";
 import { useApp } from "../ctx";
 import Fold from "../components/Fold";
 import WorkDays, { workDaysText } from "../components/WorkDays";
 import { isIOS, webPushSupport } from "../pwa";
-import { BRANDS } from "../wearables";
+import { BRANDS, type WearableStatus, wearableSummary } from "../wearables";
 import OuraConnect from "./Oura";
 import WearablePicker from "./WearablePicker";
 import WebNotifications, { IphoneLimits } from "./WebNotifications";
@@ -35,6 +35,15 @@ export function SettingsWebPush({ person }: { person: string }) {
 }
 
 export function SettingsWearable({ person, value, onChange }: { person: string; value: string; onChange: (v: string) => void }) {
+  const { snap } = useApp();
+  const [wearables, setWearables] = useState<WearableStatus[] | null>(null);
+  useEffect(() => {
+    if (isApp()) return;
+    let live = true;
+    setWearables(null);
+    api.get<WearableStatus[]>(`/api/people/${person}/wearables`).then(r => live && setWearables(r ?? [])).catch(() => live && setWearables([]));
+    return () => { live = false; };
+  }, [person]);
   const name = BRANDS.find(b => b.id === value)?.name;
   if (isApp()) {
     // the Android app has Health Connect above; Oura's direct connection is the fallback
@@ -47,8 +56,9 @@ export function SettingsWearable({ person, value, onChange }: { person: string; 
       </Fold>
     );
   }
+  const summary = wearables === null ? (name ?? "…") : wearableSummary(wearables, value, snap?.tz, snap?.now);
   return (
-    <Fold id="settings.wearable" anchor="watch" title="Watch or ring" summary={name ?? "None picked"}>
+    <Fold id="settings.wearable" anchor="watch" title="Watch or ring" summary={summary}>
       <div className="card" style={{ display: "grid", gap: 12 }}>
         <WearablePicker person={person} value={value} onChange={onChange} />
         {isIOS() && <IphoneLimits />}

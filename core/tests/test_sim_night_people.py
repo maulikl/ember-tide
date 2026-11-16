@@ -297,14 +297,14 @@ async def test_going_to_bed_at_six_in_the_morning(tmp_path):
 
 
 async def test_a_night_that_runs_past_noon(tmp_path):
-    """Sleeping in until 13:30: the side turned off after the warm wake and stays off; the new day at noon does not
-    start a second night or restart the bed."""
+    """Sleeping in until 13:30: the lie-in keeps the side on while they're in bed, up to its safety cap (4 h past the
+    night's end), then off; the new day at noon does not start a second night or restart the bed."""
     r = Sim(tmp_path, "2026-11-05T21:00")
     plan = Plan().sleep("left", "22:40", "+13:30")
     await r.run("2026-11-06T14:30", script=plan)
     p = r.p1
     assert r.started_count(p) == 1
-    assert r.at(p, "2026-11-06T09:00")[3] is False and r.at(p, "2026-11-06T12:30")[3] is False
+    assert r.at(p, "2026-11-06T09:00")[3] is True and r.at(p, "2026-11-06T12:30")[3] is False
     assert r.e(p).s.state in ("day", "done")
     s = r.summary(p, "2026-11-05")
     assert s["has_data"] and s["in_bed_min"] > 8 * 60

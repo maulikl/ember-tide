@@ -48,8 +48,10 @@ async def test_a_note_never_goes_out_while_either_night_is_running(tmp_path):
     await r.run("2026-11-06T15:00", script=plan)
     b = [n for n in got if n.kind == "bridge"]
     assert len(b) == 1
+    # (read a minute on: a note can go out in the very tick a long lie-in ends, which the minute's start still shows
+    # as running)
     for p in (r.p1, r.p2):
-        assert r.at(p, hm(b[0].at) and "2026-11-06T" + hm(b[0].at))[0] not in ("rhythm", "out_of_bed_hold")
+        assert r.at(p, "2026-11-06T" + hm(b[0].at + 60))[0] not in ("rhythm", "out_of_bed_hold")
 
 
 async def test_partner_not_home_gets_one_precool_message_that_ends_with_the_night(tmp_path):
