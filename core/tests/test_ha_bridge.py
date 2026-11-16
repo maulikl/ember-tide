@@ -1,8 +1,10 @@
 """Home Assistant bridge: the entities it announces, the states it publishes, and the commands it accepts."""
 
+import socket
+
 import pytest
 
-from embertide.ha_bridge import HaBridge
+from embertide.ha_bridge import HaBridge, broker_error
 from embertide.units import f_to_c
 from test_scenarios import Night
 
@@ -222,3 +224,15 @@ async def test_fahrenheit_uses_whole_degree_steps_on_climate_and_numbers(tmp_pat
     assert await b.handle("embertide/p1/set/target", "70") == "target 70"
     await n.step(1)
     assert b.states(n.c.snapshot())["embertide/p1/target"] == "70"
+
+
+def test_broker_error_uses_plain_words():
+    assert broker_error(socket.gaierror(11001, "getaddrinfo failed")) == "can't find that address"
+    assert broker_error("[Errno -2] Name or service not known") == "can't find that address"
+    assert broker_error("[Errno 8] nodename nor servname provided, or not known") == "can't find that address"
+    assert broker_error(ConnectionRefusedError("[Errno 111] Connection refused")) == "the broker refused the connection"
+    assert broker_error(TimeoutError("timed out")) == "no answer from the broker"
+    assert broker_error("Not authorised to connect") == "the broker turned down the user name or password"
+    assert broker_error("Connection Refused: bad user name or password") == "the broker turned down the user name or password"
+    assert broker_error("Not authorized (5)") == "the broker turned down the user name or password"
+    assert broker_error(OSError("[Errno 101] Network is unreachable")) == "retrying"
