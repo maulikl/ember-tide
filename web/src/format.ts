@@ -181,6 +181,7 @@ export function eventText(e: { kind: string; source?: string | null; [k: string]
     case "tonight_pause": return `Paused${min}`;
     case "tonight_start_now": return "Started by hand";
     case "tonight_delay": return `Start delayed${min}`;
+    case "wake_from_alarm": return "Wake time set from the phone's alarm";
     case "tonight_timer": case "timer": return `On by hand with a timer${min}`;
     case "home_changed": return e.home === false ? "Left home" : e.home === true ? "Back home" : "Home or away not known";
     case "feel": return `Said it feels ${String(e.feel ?? "").replace(/_/g, " ")}`.trim();

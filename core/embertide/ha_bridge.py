@@ -22,6 +22,7 @@ import asyncio
 import json
 import logging
 import re
+import socket
 import time
 from datetime import datetime
 from .mqtt_url import client_kwargs, parse_mqtt_url
@@ -38,6 +39,26 @@ BASE = "embertide"
 def slug(name: str) -> str:
     s = re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
     return s or "person"
+
+
+def broker_error(err: Exception | str) -> str:
+    """Turn raw MQTT/socket broker errors into calm, plain-English status text."""
+    if isinstance(err, socket.gaierror):
+        return "can't find that address"
+    if isinstance(err, ConnectionRefusedError):
+        return "the broker refused the connection"
+    if isinstance(err, (TimeoutError, asyncio.TimeoutError)):
+        return "no answer from the broker"
+    low = str(err).lower()
+    if "getaddrinfo" in low or "name or service not known" in low or "nodename nor servname" in low:
+        return "can't find that address"
+    if "authori" in low or "not authenticat" in low or "bad user name or password" in low:
+        return "the broker turned down the user name or password"
+    if "connection refused" in low:
+        return "the broker refused the connection"
+    if "timed out" in low or "timeout" in low:
+        return "no answer from the broker"
+    return "retrying"
 
 
 class HaBridge:
@@ -508,9 +529,9 @@ class HaBridge:
                 raise
             except Exception as e:  # noqa: BLE001
                 self._client = None
-                msg = str(e)
-                self.state = ("not authorised: check the MQTT username and password" if "authori" in msg.lower()
-                              else f"can't reach the broker, retrying ({msg[:80]})")
+                why = broker_error(e)
+                self.state = (f"not authorised: {why}" if "user name or password" in why
+                              else f"can't reach the broker ({why}), retrying" if why != "retrying" else "can't reach the broker, retrying")
                 log.warning("home assistant mqtt: %s; retry in %ss", e, backoff)
                 await asyncio.sleep(backoff)
                 backoff = min(60, backoff * 2)
