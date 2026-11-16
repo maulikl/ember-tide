@@ -465,6 +465,7 @@ script:
           int p = id(active_profile);
           std::string nm = p == 0 ? id(p0_name).state : id(p1_name).state;
           if (!et::usable(nm)) nm = p == 0 ? "${p0_name}" : "${p1_name}";
+          if ((p == 0 ? id(p0_guest).state : id(p1_guest).state) == "on") nm = "Guest";
           et::text(id(lbl_clock_sub), nm + " · off");
 
   - id: refresh_all
@@ -507,6 +508,8 @@ script:
           uint32_t c = night ? 0x7A3B31 : et::pcol(p, id(p0_color).state, id(p1_color).state, ${c_p0}, ${c_p1});
           std::string n0 = et::usable(id(p0_name).state) ? id(p0_name).state : "${p0_name}";
           std::string n1 = et::usable(id(p1_name).state) ? id(p1_name).state : "${p1_name}";
+          if (id(p0_guest).state == "on") n0 = "Guest";   // a side lent to a guest shows only "Guest"
+          if (id(p1_guest).state == "on") n1 = "Guest";
           et::text(id(lbl_side), p == 0 ? n0 : n1);
           et::color(id(lbl_side), night ? 0xB9584C : 0xF2EADF);
           et::bg(id(side_dot), c);
@@ -560,8 +563,7 @@ script:
           }
           lv_obj_set_style_bg_color(id(ring), lv_color_hex(on ? 0xF2EADF : grey), LV_PART_KNOB);
           bool guest = (p == 0 ? id(p0_guest).state : id(p1_guest).state) == "on";
-          if (guest) et::text(id(lbl_top), "Guest");
-          else if (!isnan(bed) && !flash) { snprintf(b, sizeof(b), "Bed %d°", (int) roundf(bed)); et::text(id(lbl_top), b); }
+          if (!isnan(bed) && !flash) { snprintf(b, sizeof(b), "Bed %d°", (int) roundf(bed)); et::text(id(lbl_top), b); }
           else et::text(id(lbl_top), "");
           et::color(id(lbl_top), mute);
           if (flash) { snprintf(b, sizeof(b), "%ld", (left + 59) / 60); et::text(id(lbl_unit), "MIN"); }
