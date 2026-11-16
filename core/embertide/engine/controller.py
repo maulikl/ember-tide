@@ -777,6 +777,13 @@ class Controller:
             e.sleep_sign = None                              # no sign: bedtime is still the backstop
             log.exception("sleep signs failed for %s", p.id)
         e.personal = self._personal_signals(p.zone)
+        # live evidence about the bed right now (the bed strip actually reporting, or their own watch or phone
+        # vouching), not just the last "in bed" a radar or a broker left behind: a lie-in only runs past its first
+        # stretch on this (night.py LIE_IN_FROZEN_S)
+        side = self.presence.sides.get(p.zone) if getattr(self, "presence", None) is not None else None
+        # (a pad reading "empty" is live too: getting up is handled by the out-of-bed rules, with their grace)
+        e.live_in_bed = bool((side is not None and side.raw_occupied is not None and not getattr(side, "stale", False))
+                             or (e.personal or {}).get("voting"))
         target = e.tick(now, present, home, active=self.active_since)
         if self.leak_hold:
             # Keep both sides off during leak_hold regardless of rhythms, flashes, overrides or Autopilot.

@@ -313,3 +313,25 @@ def test_sleep_screen_nights_hide_a_night_spent_away(tmp_path, monkeypatch):
         assert r[1]["has_data"] is True and "away" not in r[1]
         one = c.get(f"/api/people/{pid}/night?date=2026-11-09").json()
         assert one["away"] is True and one["has_data"] is False and "in_bed_min" not in one
+
+
+def test_left_out_lists_every_away_night_even_without_readings(tmp_path):
+    """Away Mon-Sat with no bed readings on the middle nights: every night shows once as 'you were away'."""
+    from datetime import datetime
+    from test_sides import H, ctl, make
+    with make(tmp_path) as c:
+        c.post("/api/sim", json={"jump_to": "2026-11-15T14:00"}, headers=H)
+        k = ctl(c)
+        tz = k.clock.tz
+        p = k.person("p2")
+        mon = datetime(2026, 11, 9, 10, 0, tzinfo=tz).timestamp()
+        sun = datetime(2026, 11, 15, 10, 0, tzinfo=tz).timestamp()
+        k.store.put(f"away_log:{p.id}", [[mon, sun]])
+        k.store.put(f"away_check:{p.id}", {"2026-11-14": {"kind": "away", "status": "away", "why": "empty", "at": sun}})
+        # Monday had readings (so it enters through summary.recent); Tue-Sat had none at all
+        mon_in = datetime(2026, 11, 9, 23, 0, tzinfo=tz).timestamp()
+        k.store.telemetry([(mon_in + 60 * i, p.zone, 1, 20.0, 20.0, 1, 60, 14, 0, 20.0, "deep", 1, p.id) for i in range(240)])
+        k.autopilot.__dict__.get("_nights_cache", {}).pop(p.id, None)
+        left = k.autopilot.learning(p, k.clock.now_ts())["left_out"]
+        assert [x["date"] for x in left] == ["2026-11-14", "2026-11-13", "2026-11-12", "2026-11-11", "2026-11-10", "2026-11-09"]
+        assert all(x["why"] == "you were away" for x in left)

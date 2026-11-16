@@ -264,8 +264,13 @@ class NightEngine:
         return True
 
     # ---------- lying in ----------
-    LIE_IN_MAX_S = 45 * 60      # the wake target runs on at most this long past the night's end
-    LIE_IN_SNOOZE_MAX_S = 90 * 60   # ... or, with a snoozed / extended alarm, up to its time + LIE_IN_AFTER_ALARM_S, never past this
+    # the wake target runs on while they're still in bed (getting up ends it: LIE_IN_UP_S), up to this long past the
+    # night's end only as a safety net for a sensor stuck on "occupied" (2026-11-15: a 45-minute cap turned the side off
+    # at 10:30 while its sleeper was still asleep until 11:42)
+    LIE_IN_MAX_S = 4 * 3600
+    # ... but only on live evidence (the bed strip reading them, or their watch/phone): with nothing but a frozen
+    # "occupied" left behind (a broker down, the pad dead) it stops this long past the end, as before
+    LIE_IN_FROZEN_S = 45 * 60
     LIE_IN_AFTER_ALARM_S = 15 * 60
     LIE_IN_UP_S = 3 * 60        # out of bed this long = got up, the night is over (short: the side must not heat an empty bed)
     LIE_IN_UP_SNOOZE_S = 10 * 60  # while a snoozed alarm is still to come, a longer break (a bathroom trip) doesn't end it
@@ -289,10 +294,11 @@ class NightEngine:
             return False
         if s.lie_in_over:
             return False
+        live = getattr(self, "live_in_bed", True)       # (engines driven without a controller: tests, tools)
         cap = n.end + self.LIE_IN_MAX_S
+        if not live and now >= n.end + self.LIE_IN_FROZEN_S:
+            cap = now                                    # nothing live says they're there: end it as before
         sn = s.snoozed_until
-        if sn:
-            cap = min(max(cap, sn + self.LIE_IN_AFTER_ALARM_S), n.end + self.LIE_IN_SNOOZE_MAX_S)
         if not s.lie_in:
             if not (present or active is not None) or now >= cap:
                 s.lie_in_over = True
@@ -347,8 +353,7 @@ class NightEngine:
                 if prev_n is None or prev_n.date != prev_d:
                     prev_rh = pick_rhythm(self.person.rhythms, prev_d)
                     prev_n = self._resolve(prev_rh, prev_d) if prev_rh else None
-                cap_s = self.LIE_IN_SNOOZE_MAX_S if self.s.snoozed_until else self.LIE_IN_MAX_S
-                if prev_n is not None and now < prev_n.end + cap_s:
+                if prev_n is not None and now < prev_n.end + self.LIE_IN_MAX_S:
                     keep_prev = True
                     d, key = prev_d, self.s.key
             if not keep_prev:

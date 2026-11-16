@@ -22,7 +22,7 @@ import PhoneNotifications from "./PhoneNotifications";
 import PhoneSources from "./PhoneSources";
 import { SettingsWorkDays, SettingsWearable, SettingsWebPush, SetupAgain } from "./SettingsExtras";
 import { isApp } from "../api";
-import { colorKey, COLORS, cToF, personaColor, weightUnit } from "../format";
+import { colorKey, COLORS, cToF, limitPhaseNote, personaColor, weightUnit } from "../format";
 import { compactPref, type CompactPref, setCompactPref } from "../keyboard";
 import { appUpdateInfo, appUpdateInstall, type AppUpdateInfo } from "../native";
 import type { Learning, PersonSettings, Snapshot, UpdateInfo } from "../types";
@@ -143,7 +143,9 @@ export default function Settings() {
           ? <Steps label="change" value={Math.round(ap.max_delta_c * 9 / 5)} min={1} max={6} step={1} fmt={v => `±${v}°`} onChange={v => upd({ autopilot: { ...ap, max_delta_c: v * 5 / 9 } })} />
           : <Steps label="change" value={Math.round(ap.max_delta_c * 2) / 2} min={0.5} max={3.5} step={0.5} fmt={v => `±${v.toFixed(1)}°`} onChange={v => upd({ autopilot: { ...ap, max_delta_c: v } })} />}</div>
         <div className="row"><span>Never below</span><TempSteps label="floor" c={ap.floor_c} units={u} minF={50} maxF={Math.round(cToF(ap.ceiling_c)) - 2} onChange={c => upd({ autopilot: { ...ap, floor_c: c } })} /></div>
+        {(() => { const n = limitPhaseNote(me.phases, ap.floor_c, "below", u); return n ? <p className="faint" style={{ fontSize: 12, margin: "-2px 0 6px" }}>{n}</p> : null; })()}
         <div className="row"><span>Never above</span><TempSteps label="ceiling" c={ap.ceiling_c} units={u} minF={Math.round(cToF(ap.floor_c)) + 2} maxF={104} onChange={c => upd({ autopilot: { ...ap, ceiling_c: c } })} /></div>
+        {(() => { const n = limitPhaseNote(me.phases, ap.ceiling_c, "above", u); return n ? <p className="faint" style={{ fontSize: 12, margin: "-2px 0 6px" }}>{n}</p> : null; })()}
         <div className="row"><span>Changes per night, at most</span><Steps label="changes" value={ap.max_actions} min={1} max={10} step={1} fmt={v => `${v}`} onChange={v => upd({ autopilot: { ...ap, max_actions: v } })} /></div>
         <div className="row"><span className="k" style={{ margin: 0 }}>Parts of the night it can adjust<Tip label="Why only some parts" text="Autopilot only touches the parts switched on here. Recommended leaves wind-down and the warm wake alone, so bedtime and waking feel the same every night." /></span><button className="pill" onClick={() => upd({ autopilot: { ...ap, phases: [...AP_REC] } })}>Use recommended</button></div>
         {AP_PHASES.map(([id, name]) => (

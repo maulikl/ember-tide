@@ -31,11 +31,12 @@ async def test_lie_in_keeps_side_on_until_they_get_up(tmp_path):
     assert len(nd) == 1 and end + 600 + 150 <= nd[0]["ts"] <= end + 600 + 300
 
 
-async def test_lie_in_capped_at_45_min(tmp_path):
+async def test_lie_in_runs_while_in_bed_with_a_safety_cap(tmp_path):
+    # 2026-11-15: the old 45-minute cap turned the side off while its sleeper was still asleep
     n, e, end, _ = await _to_end(tmp_path)
-    await n.until(iso(end + 44 * 60))
-    assert e.s.state == "rhythm"
-    await n.until(iso(end + 46 * 60))
+    await n.until(iso(end + 2 * 3600), dt=120)
+    assert e.s.state == "rhythm" and e.s.lie_in and n.side("left").on
+    await n.until(iso(end + 4 * 3600 + 120), dt=120)
     assert e.s.state == "done" and len(n.events("night_done")) == 1
 
 
@@ -64,9 +65,10 @@ async def test_snooze_extends_lie_in_through_flicker(tmp_path):
     n.present("left", False)                                  # a brief flicker (5 min, longer than the usual 3)
     await n.step(10)
     n.present("left", True)
-    await n.until(iso(end + 44 * 60))
-    assert e.s.state == "rhythm"
     await n.until(iso(end + 46 * 60))
+    assert e.s.state == "rhythm" and e.s.lie_in                # still in bed: carries on
+    n.present("left", False)
+    await n.until(iso(end + 46 * 60 + 300))
     assert e.s.state == "done" and len(n.events("night_done")) == 1
 
 

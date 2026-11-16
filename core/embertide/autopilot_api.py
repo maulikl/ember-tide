@@ -221,6 +221,14 @@ def build_autopilot_router(state) -> APIRouter:
         person(pid)
         return ctl().store.get(f"imports:{pid}", [])
 
+    @r.get("/people/{pid}/wearables")
+    async def wearables(pid: str):
+        """Watch or ring sources that have reported for this person lately."""
+        p = person(pid)
+        c = ctl()
+        rows = await asyncio.to_thread(c.autopilot.wearable_status, p, c.clock.now_ts())
+        return [{"name": w["name"], "kind": w["kind"], "last": w["last"], "quiet": w["quiet"]} for w in rows]
+
     @r.get("/people/{pid}/wearable/nights")
     async def wearable_nights(pid: str, days: int = 7):
         """Recent nights: how much of each the watch or ring covered, whether its stages arrived, what's missing."""

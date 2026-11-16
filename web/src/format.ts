@@ -205,3 +205,14 @@ export function eventText(e: { kind: string; source?: string | null; [k: string]
     default: return e.kind.replace(/_/g, " ").replace(/^./, c => c.toUpperCase());
   }
 }
+
+/** Faint note when any rhythm phase sits past Autopilot's floor or ceiling, in the person's units. */
+export function limitPhaseNote(phases: { name: string; temp_c: number }[] | null | undefined, bound_c: number, dir: "below" | "above", units: "F" | "C"): string | null {
+  if (!phases?.length) return null;
+  const disp = (c: number) => Math.round(units === "F" ? cToF(c) : c);
+  const limit = disp(bound_c);
+  const past = phases.filter(ph => dir === "above" ? disp(ph.temp_c) > limit : disp(ph.temp_c) < limit);
+  if (!past.length) return null;
+  const peak = past.reduce((best, ph) => (dir === "above" ? ph.temp_c > best.temp_c : ph.temp_c < best.temp_c) ? ph : best, past[0]);
+  return `Your rhythm goes ${dir} this (${peak.name} ${temp(peak.temp_c, units)}). Autopilot won't go past it; your own rhythm still can.`;
+}

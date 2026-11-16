@@ -7,7 +7,7 @@ import LeftOutNights from "../components/LeftOutNights";
 import { HelpLink } from "./Help";
 import { useApp } from "../ctx";
 import { useAuth, useOwnPerson } from "../auth";
-import { clock, cToF, h12 } from "../format";
+import { clock, cToF, h12, limitPhaseNote } from "../format";
 import type { AutopilotPolicy, Band, Baseline, Learning, Suggestions } from "../types";
 
 interface Reason { signal: string; label: string; value: string; detail: string; push: number }
@@ -142,10 +142,32 @@ export default function Autopilot() {
   useEffect(() => { setDirty(false); setReplay(null); setReview(null); loadAll(); const t = setInterval(loadAll, 30000); return () => clearInterval(t); }, [person?.id]);
   useEffect(() => {
     if (!person) return;
-    api.get<NightData>(`/api/people/${person.id}/autopilot/night${date ? `?date=${date}` : ""}`).then(n => { setNight(n); if (!date) setDate(n.date); }).catch(() => setNight(null));
-    api.get<typeof review>(`/api/people/${person.id}/autopilot/ai-review${date ? `?date=${date}` : ""}`).then(r => setReview(r && (r as { answer?: string }).answer ? r : null)).catch(() => {});
+    let live = true;
+    setDate(null); setNight(null);
+    api.get<{ date: string; has_data?: boolean }[]>(`/api/people/${person.id}/nights?count=14`)
+      .then(ns => {
+        if (!live) return;
+        const picked = ns.find(n => n.has_data)?.date ?? ns[0]?.date;
+        if (picked) setDate(picked);
+        else api.get<NightData>(`/api/people/${person.id}/autopilot/night`).then(n => live && (setNight(n), setDate(n.date))).catch(() => live && setNight(null));
+      })
+      .catch(() => {
+        if (!live) return;
+        api.get<NightData>(`/api/people/${person.id}/autopilot/night`).then(n => live && (setNight(n), setDate(n.date))).catch(() => live && setNight(null));
+      });
+    return () => { live = false; };
+  }, [person?.id]);
+  useEffect(() => {
+    if (!person || !date) return;
+    let live = true;
+    setReview(null);
+    api.get<NightData>(`/api/people/${person.id}/autopilot/night?date=${date}`).then(n => live && setNight(n)).catch(() => live && setNight(null));
+    api.get<typeof review>(`/api/people/${person.id}/autopilot/ai-review?date=${date}`).then(r => live && setReview(r && (r as { answer?: string }).answer ? r : null)).catch(() => live && setReview(null));
+    return () => { live = false; };
   }, [person?.id, date]);
   if (!snap || !person || !pol || !meta) return null;
+  const floorNote = limitPhaseNote(person.phases, pol.floor_c, "below", u);
+  const ceilingNote = limitPhaseNote(person.phases, pol.ceiling_c, "above", u);
 
   // Settings save themselves (like the phone): each change waits a moment for the next one, then saves.
   const save = async (p: AutopilotPolicy = polRef.current ?? pol) => {
@@ -376,7 +398,9 @@ export default function Autopilot() {
             <Num help="After you press + or − (or a flash), it keeps its hands off for this long. Recommended: 30 min." label="Your own change wins for" v={pol.respect_manual_min} min={0} max={180} step={15} fmt={v => `${v} min`} set={v => upd({ respect_manual_min: v })} />
             <Num help="No changes this close to your wake time, so the warm wake runs as planned. Recommended: 45 min." label="Leave it alone before wake" v={pol.quiet_before_wake_min} min={0} max={120} step={15} fmt={v => `${v} min`} set={v => upd({ quiet_before_wake_min: v })} />
             <Num help="It never sets your side colder than this." label="Never below" v={Math.round(u === "F" ? cToF(pol.floor_c) : pol.floor_c)} min={u === "F" ? 50 : 10} max={Math.min(u === "F" ? 90 : 32, Math.round(u === "F" ? cToF(pol.ceiling_c) : pol.ceiling_c) - 2)} step={1} fmt={v => `${v}°`} set={v => upd({ floor_c: u === "F" ? (v - 32) * 5 / 9 : v })} />
+            {floorNote && <span className="faint" style={{ fontSize: 12 }}>{floorNote}</span>}
             <Num help="It never sets your side warmer than this." label="Never above" v={Math.round(u === "F" ? cToF(pol.ceiling_c) : pol.ceiling_c)} min={Math.max(u === "F" ? 55 : 13, Math.round(u === "F" ? cToF(pol.floor_c) : pol.floor_c) + 2)} max={u === "F" ? 104 : 40} step={1} fmt={v => `${v}°`} set={v => upd({ ceiling_c: u === "F" ? (v - 32) * 5 / 9 : v })} />
+            {ceilingNote && <span className="faint" style={{ fontSize: 12 }}>{ceilingNote}</span>}
             <span className="k" style={{ marginTop: 6 }}>Parts of the night it may change</span>
             <div className="chips">{(person.phases?.length ? person.phases : night?.phases ?? []).map(ph => <button key={ph.id} className="chip" aria-pressed={pol.phases.includes(ph.id)} onClick={() => upd({ phases: pol.phases.includes(ph.id) ? pol.phases.filter(x => x !== ph.id) : [...pol.phases, ph.id] })}>{ph.name}</button>)}</div>
             <span className="faint" style={{ fontSize: 12 }} role="status">{saving ?? (dirty ? "Saving soon…" : "Changes save automatically.")}</span>

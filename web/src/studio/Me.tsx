@@ -14,7 +14,7 @@ import { colorKey, COLORS, personaColor, weightUnit } from "../format";
 import { SleepDataRows, sleepDataSummary } from "../screens/SettingsSleep";
 import type { PersonSettings, PersonView } from "../types";
 import type { PhoneSource } from "../native";
-import { BRANDS } from "../wearables";
+import { BRANDS, type WearableStatus, wearableSummary } from "../wearables";
 import { agoText } from "./PhoneRows";
 
 /**
@@ -255,13 +255,16 @@ function NotifyBox({ s, name, save }: { s: PersonSettings; name: string; save: (
 
 /** What this person's phone and watch send. Read-only: those switches live in the phone app. */
 function PhoneBox({ p, s }: { p: PersonView; s: PersonSettings }) {
+  const { snap } = useApp();
   const [phone, setPhone] = useState<{ device?: string | null; sharing?: string[]; seen?: number | null } | null>(null);
   const [watch, setWatch] = useState<{ seen: number | null; wanted: boolean } | null>(null);
+  const [wearables, setWearables] = useState<WearableStatus[] | null>(null);
   useEffect(() => {
     let live = true;
     const f = () => {
       api.get<typeof phone>(`/api/people/${p.id}/phone-context`).then(r => live && setPhone(r ?? {})).catch(() => live && setPhone({}));
       api.get<{ seen: number | null; wanted: boolean }>(`/api/people/${p.id}/watch-hr`).then(r => live && setWatch(r)).catch(() => live && setWatch(null));
+      api.get<WearableStatus[]>(`/api/people/${p.id}/wearables`).then(r => live && setWearables(r ?? [])).catch(() => live && setWearables([]));
     };
     f(); const t = window.setInterval(f, 30000);
     return () => { live = false; window.clearInterval(t); };
@@ -277,7 +280,7 @@ function PhoneBox({ p, s }: { p: PersonView; s: PersonSettings }) {
         <div className="row"><span>Phone</span><span className="mute" style={{ textAlign: "right" }}>{!phone ? "Checking…" : phone.seen ? `${phone.device || "Phone"} · last seen ${agoText(now - phone.seen)}` : "Hasn't reported yet"}</span></div>
         <div className="row"><span>Shares</span><span className="mute" style={{ textAlign: "right" }}>{sharing.length ? sharing.map(x => (PHONE_LABEL as Record<string, string>)[x] ?? x).join(", ") : "nothing"}</span></div>
         <div className="row"><span>Watch heart rate at night</span><span className="mute" style={{ textAlign: "right" }}>{!hrOn ? "Off" : watch?.seen ? `On · last batch ${agoText(now - watch.seen)}` : "On · nothing yet"}</span></div>
-        <div className="row"><span>Watch or ring</span><span className="mute">{brand ?? "None picked"}</span></div>
+        <div className="row"><span>Watch or ring</span><span className="mute" style={{ textAlign: "right" }}>{wearables === null ? (brand ?? "Checking…") : wearableSummary(wearables, s.wearable, snap?.tz, snap?.now ?? now)}</span></div>
       </div>
       <span className="faint" style={{ fontSize: 12.5 }}>Change these in the phone app: Settings → From this phone, and Watch or ring. Devices that report through Home Assistant are in <Link to="/studio/devices">Devices</Link>.</span>
     </Fold>
