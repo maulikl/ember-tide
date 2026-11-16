@@ -6,7 +6,7 @@ from __future__ import annotations
 from collections import Counter
 from datetime import datetime
 import math
-from statistics import mean
+from statistics import mean, median
 from zoneinfo import ZoneInfo
 
 from ..models import Household, Person, clamp_phase_temp
@@ -36,27 +36,65 @@ def insights(person: Person, nights: list[dict], tz: ZoneInfo, now: float) -> li
     phase = {p.id: p for p in rh.phases} if rh else {}
     F = 5 / 9
 
+    def rhythm_of(ns: list[dict]):
+        """The rhythm most of these nights belong to (a weeknight change shouldn't come from weekend nights), with
+        its phases; falls back to tonight's."""
+        from datetime import date as _date
+        got = Counter()
+        for n in ns:
+            try:
+                r = pick_rhythm(person.rhythms, _date.fromisoformat(n["date"]))
+            except (KeyError, ValueError, TypeError):
+                r = None
+            if r is not None:
+                got[r.id] += 1
+        if not got:
+            return rh, phase
+        best = next(r for r in person.rhythms if r.id == got.most_common(1)[0][0])
+        return best, {p.id: p for p in best.phases}
+
+    def named(r, text: str) -> str:
+        return f"{r.name}: {text}" if r is not None and len(person.rhythms) > 1 else text
+
+    def mornings(k: int, total: int) -> str:
+        return f"on your last {total} mornings" if k == total else f"on {k} of your last {total} mornings"
+
     # 1. feedback says warm/cold
     fb = [n["feedback"]["temp"] for n in done if n.get("feedback")]
     c = Counter(fb)
-    if fb and c["warm"] >= max(2, len(fb) // 2) and "deep" in phase:
-        out.append({"id": "fb_warm", "severity": "suggest", "title": "You've said “too warm” on several mornings",
-                    "detail": f"{c['warm']} of your last {len(fb)} check-ins were too warm. Try Deep one degree cooler.",
-                    "evidence": [n["date"] for n in done if (n.get("feedback") or {}).get("temp") == "warm"],
-                    "proposal": {"rhythm_id": rh.id, "phase_id": "deep", "field": "temp_c", "from": phase["deep"].temp_c, "to": round(phase["deep"].temp_c - F, 2)}})
-    if fb and c["cold"] >= max(2, len(fb) // 2) and "late" in phase:
-        out.append({"id": "fb_cold", "severity": "suggest", "title": "You've said “too cold” on several mornings",
-                    "detail": f"{c['cold']} of your last {len(fb)} check-ins were too cold. Try Late night one degree warmer.",
-                    "evidence": [n["date"] for n in done if (n.get("feedback") or {}).get("temp") == "cold"],
-                    "proposal": {"rhythm_id": rh.id, "phase_id": "late", "field": "temp_c", "from": phase["late"].temp_c, "to": round(phase["late"].temp_c + F, 2)}})
+    if fb and c["warm"] >= max(2, len(fb) // 2):
+        ev = [n for n in done if (n.get("feedback") or {}).get("temp") == "warm"]
+        r, ph = rhythm_of(ev)
+        if "deep" in ph:
+            out.append({"id": "fb_warm", "severity": "suggest", "title": f"You've said “too warm” {mornings(c['warm'], len(fb))}",
+                        "detail": named(r, "Try Deep one degree cooler."),
+                        "evidence": [n["date"] for n in ev],
+                        "proposal": {"rhythm_id": r.id, "phase_id": "deep", "field": "temp_c", "from": ph["deep"].temp_c, "to": round(ph["deep"].temp_c - F, 2)}})
+    if fb and c["cold"] >= max(2, len(fb) // 2):
+        ev = [n for n in done if (n.get("feedback") or {}).get("temp") == "cold"]
+        r, ph = rhythm_of(ev)
+        if "late" in ph:
+            out.append({"id": "fb_cold", "severity": "suggest", "title": f"You've said “too cold” {mornings(c['cold'], len(fb))}",
+                        "detail": named(r, "Try Late night one degree warmer."),
+                        "evidence": [n["date"] for n in ev],
+                        "proposal": {"rhythm_id": r.id, "phase_id": "late", "field": "temp_c", "from": ph["late"].temp_c, "to": round(ph["late"].temp_c + F, 2)}})
 
-    # 2. slow to settle
-    tts = [n["time_to_settle_min"] for n in done if n.get("time_to_settle_min") is not None]
-    if len(tts) >= 2 and mean(tts) > 25 and "fall_asleep" in phase:
-        out.append({"id": "slow_settle", "severity": "suggest", "title": f"Settling takes about {round(mean(tts))} minutes",
-                    "detail": "A slightly cooler Fall asleep phase often shortens this. Try one degree cooler for a week.",
-                    "evidence": [f"{n['date']}: {n['time_to_settle_min']} min" for n in done if n.get("time_to_settle_min") is not None],
-                    "proposal": {"rhythm_id": rh.id, "phase_id": "fall_asleep", "field": "temp_c", "from": phase["fall_asleep"].temp_c, "to": round(phase["fall_asleep"].temp_c - F, 2)}})
+    # 2. slow to settle: the typical night (median, so one bad night doesn't decide it), on the rhythm those nights
+    # belong to, and only while it's still true lately (2026-11-15: an average of 85/54/105 said "45 minutes" after
+    # three nights of 7-10)
+    st = [n for n in done if n.get("time_to_settle_min") is not None]
+    if st:
+        r, ph = rhythm_of(st)
+        from datetime import date as _date
+        mine = [n for n in st if pick_rhythm(person.rhythms, _date.fromisoformat(n["date"])) is r]
+        tts = [n["time_to_settle_min"] for n in mine]
+        recent3 = tts[:3]                                # newest first
+        # the last night on this rhythm must be slow too: a quick last night means wait and see
+        if (len(tts) >= 3 and median(tts) > 25 and tts[0] > 25 and sum(1 for x in recent3 if x > 25) >= 2 and "fall_asleep" in ph):
+            out.append({"id": "slow_settle", "severity": "suggest", "title": named(r, f"Settling usually takes about {round(median(tts))} minutes"),
+                        "detail": "A slightly cooler Fall asleep phase often shortens this. Try one degree cooler for a week.",
+                        "evidence": [f"{n['date']}: {n['time_to_settle_min']} min" for n in mine],
+                        "proposal": {"rhythm_id": r.id, "phase_id": "fall_asleep", "field": "temp_c", "from": ph["fall_asleep"].temp_c, "to": round(ph["fall_asleep"].temp_c - F, 2)}})
 
     # 3. hot flashes cluster in the late part of the night
     hf = [m for n in done for m in n.get("moments", []) if m["kind"] == "hot_flash"]

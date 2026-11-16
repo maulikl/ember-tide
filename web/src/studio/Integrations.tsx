@@ -94,7 +94,7 @@ export default function Integrations() {
             <label className="field" style={{ flex: 1 }}><span>Username</span><input type="text" autoComplete="off" value={form.username} onChange={e => setForm({ ...form, username: e.target.value })} /></label>
             <label className="field" style={{ flex: 1 }}><span>Password</span><input type="password" autoComplete="new-password" value={form.password} placeholder={ha?.password_saved ? "Saved · type to replace" : ""} onChange={e => setForm({ ...form, password: e.target.value })} /></label>
           </div>
-          <details><summary className="mute" style={{ fontSize: 13, cursor: "pointer" }}>Discovery prefix</summary>
+          <details><summary className="mute" style={{ fontSize: 13, cursor: "pointer" }}>Advanced</summary>
             <label className="field" style={{ marginTop: 8 }}><span>Discovery prefix</span><input type="text" value={form.prefix} onChange={e => setForm({ ...form, prefix: e.target.value })} /><small className="mute">Leave as "homeassistant" unless you changed it in HA's MQTT settings.</small></label></details>
           <div className="row" style={{ justifyContent: "flex-start", gap: 8 }}>
             <button className="btn pri" disabled={busy || !form.host} onClick={() => save()}>{st === "connected" ? "Save changes" : "Save & connect"}</button>
