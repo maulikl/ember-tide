@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../api";
 import Fold from "../components/Fold";
 import NightFix from "../components/NightFix";
 import RingCard, { type Ring } from "../components/RingCard";
 import NapsCard, { type Nap } from "../components/NapsCard";
 import PetQuestion from "../components/PetQuestion";
+import SleepHistory from "../components/SleepHistory";
+import SleepReview from "../components/SleepReview";
 import Tip from "../components/Tip";
 import { useApp } from "../ctx";
-import { clock, cToF, deltaText, hm12, sourceText, tempNum, h12 } from "../format";
+import { clock, cToF, deltaText, sourceText, tempNum, h12 } from "../format";
 
 interface Moment { kind: string; ts: number; end?: number; who?: string; pet?: string | null; corrected?: boolean; count?: number; delta_c?: number; temp_c?: number | null; minutes?: number; extended?: number; stopped_at?: number; source?: string | null; phase?: string | null; phase_name?: string | null; home?: boolean | null; why?: string; text?: string; with_person?: boolean; fitted?: boolean }
 interface Night {
@@ -182,6 +184,11 @@ export default function SleepScreen() {
   const loc = useLocation();
   const wanted = /^\d{4}-\d{2}-\d{2}$/.test(new URLSearchParams(loc.search).get("night") ?? "") ? new URLSearchParams(loc.search).get("night") : null;
   const [date, setDate] = useState<string | null>(wanted);
+  // three sections: the night itself, its review and suggestions (#review, where notifications and Tonight's cards
+  // link), and the history of nights (#history)
+  const nav = useNavigate();
+  const tab: "night" | "review" | "history" = loc.hash === "#review" ? "review" : loc.hash === "#history" ? "history" : "night";
+  const setTab = (t: "night" | "review" | "history") => nav({ pathname: loc.pathname, search: loc.search, hash: t === "night" ? "" : `#${t}` }, { replace: true });
   useEffect(() => { if (wanted) setDate(wanted); }, [wanted]);
   const [night, setNight] = useState<Night | null>(null);
   const [stageSrc, setStageSrc] = useState<string | null>(null);
@@ -209,9 +216,21 @@ export default function SleepScreen() {
   return (
     <div className="screen">
         <PetQuestion person={me.id} />
-        <MorningSuggestions pid={me.id} units={u} say={say} />
-        <GuideCards pid={me.id} say={say} />
       <div className="k">Sleep</div>
+      <div className="seg sleep-tabs" role="tablist" aria-label="Sleep sections">
+        {([["night", "Night"], ["review", "Review"], ["history", "History"]] as const).map(([id, l]) =>
+          <button key={id} role="tab" aria-selected={tab === id} className={tab === id ? "on" : ""} onClick={() => setTab(id)}>{l}</button>)}
+      </div>
+      {tab === "review" && (() => {
+        const list = (nights ?? []).filter(x => !x.in_progress);
+        const d = list.some(x => x.date === date) ? date : list[0]?.date ?? null;
+        const idx = list.findIndex(x => x.date === d);
+        const label = list[idx]?.label ?? (d ? new Date(d + "T12:00:00").toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }) : "Last night");
+        return <SleepReview pid={me.id} date={d} label={label} units={u} say={say} onDate={setDate}
+          older={idx >= 0 && idx < list.length - 1 ? list[idx + 1].date : null} newer={idx > 0 ? list[idx - 1].date : null} />;
+      })()}
+      {tab === "history" && <SleepHistory pid={me.id} onOpen={d => { setDate(d); setTab("review"); }} />}
+      {tab === "night" && <>
       {(() => {
         const list = nights ?? [];
         const idx = list.findIndex(x => x.date === date);
@@ -297,6 +316,7 @@ export default function SleepScreen() {
         </section>
         </div>
       </>)}
+      </>}
     </div>
   );
 }
@@ -313,55 +333,3 @@ function NoteBox({ initial, onSave }: { initial: string; onSave: (note: string) 
   );
 }
 
-
-function MorningSuggestions({ pid, units, say }: { pid: string; units: "F" | "C"; say: (m: string) => void }) {
-  const [data, setData] = useState<import("../types").Suggestions | null>(null);
-  const load = () => api.get<import("../types").Suggestions>(`/api/people/${pid}/autopilot/suggestions`).then(setData).catch(() => {});
-  useEffect(() => { load(); }, [pid]);
-  if (!data || data.items.length === 0) return null;
-  const f = (c?: number) => c == null ? "" : `${Math.round(units === "F" ? c * 9 / 5 + 32 : c)}°`;
-  return (
-    <div className="card" style={{ borderColor: "color-mix(in srgb,var(--acc) 45%,var(--line))" }}>
-      <span className="k">A suggestion</span>
-      {data.items.slice(0, 2).map(s => (
-        <div key={s.id} style={{ display: "grid", gap: 6, paddingTop: 4 }}>
-          <b style={{ fontWeight: 500, fontSize: 15 }}>{s.title}</b>
-          <span className="mute" style={{ fontSize: 13 }}>{s.detail} {s.proposal.from != null && <>({f(s.proposal.from)} → {f(s.proposal.to)})</>}</span>
-          <div className="chips">
-            <button className="btn pri" onClick={async () => { try { await api.post(`/api/people/${pid}/insights/apply`, { proposal: s.proposal, insight_id: s.id, source: "suggestion" }); say("Added to your rhythm"); load(); } catch (e) { say(`Couldn't do that: ${(e as Error).message}`); } }}>Add to my rhythm</button>
-            <button className="chip" onClick={async () => { try { await api.post(`/api/people/${pid}/autopilot/suggestions/${s.id}/dismiss`, { forever: false }); load(); } catch (e) { say(`Couldn't do that: ${(e as Error).message}`); } }}>Not now</button>
-            {s.kind === "manual" && <button className="chip" onClick={async () => { try { await api.post(`/api/people/${pid}/autopilot/suggestions/${s.id}/dismiss`, { forever: true }); say("Won't suggest your own changes again. Turn it back on in Studio → Autopilot."); load(); } catch (e) { say(`Couldn't do that: ${(e as Error).message}`); } }}>Don't ask again</button>}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-interface GuideItem { id: string; kind?: string; title: string; detail: string; proposal: { rhythm_id: string; schedule?: string; from?: string | number; to: string | number } | null; applied?: unknown; dismissed?: boolean }
-
-/** Tuning-guide changes (bedtime / wake that match how your nights really go). Only ones with a change to make;
- *  "Not now" is remembered on the server for this person until it comes back with new evidence (a different suggested time). */
-function GuideCards({ pid, say }: { pid: string; say: (m: string) => void }) {
-  const [items, setItems] = useState<GuideItem[]>([]);
-  const load = () => api.get<GuideItem[]>(`/api/people/${pid}/insights`).then(r => setItems(r.filter(i => i.kind === "guide" && i.proposal?.schedule && !i.dismissed))).catch(() => {});
-  useEffect(() => { load(); }, [pid]);
-  const shown = items.slice(0, 2);
-  if (!shown.length) return null;
-  return (
-    <div className="card">
-      <span className="k">Your bedtime and wake</span>
-      {shown.map(i => (
-        <div key={i.id} style={{ display: "grid", gap: 6, paddingTop: 4 }}>
-          <b style={{ fontWeight: 500, fontSize: 15 }}>{i.title}</b>
-          <span className="mute" style={{ fontSize: 13 }}>{i.detail}</span>
-          <div className="chips">
-            <button className="btn pri" onClick={async () => { try { await api.post(`/api/people/${pid}/insights/apply`, { proposal: i.proposal, insight_id: i.id, source: "guide" }); say(`${i.proposal!.schedule === "bedtime" ? "Bedtime" : "Wake"} is now ${hm12(String(i.proposal!.to))}`); load(); } catch (e) { say(`Couldn't do that: ${(e as Error).message}`); } }}>
-              Change to {hm12(String(i.proposal!.to))}</button>
-            <button className="chip" onClick={() => { setItems(items.filter(x => x.id !== i.id)); api.post(`/api/people/${pid}/insights/dismiss`, { id: i.id, sig: String(i.proposal?.to ?? "") }).catch(() => { /* hidden here anyway */ }); }}>Not now</button>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}

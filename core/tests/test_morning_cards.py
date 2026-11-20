@@ -60,3 +60,70 @@ def test_morning_endpoint(tmp_path):
     with make(tmp_path) as tc:
         r = tc.get("/api/people/p1/morning", headers=H)
         assert r.status_code == 200 and set(r.json()) == {"night", "cards"}
+
+
+# ---------- Sleep → Review & History ----------
+
+def test_apply_then_undo_puts_the_old_value_back(tmp_path):
+    with make(tmp_path) as c:
+        rh = c.get("/api/people/p1/rhythms", headers=H).json()[0]
+        deep = next(p for p in rh["phases"] if p["id"] == "deep")
+        prop = {"rhythm_id": rh["id"], "phase_id": "deep", "field": "temp_c", "from": deep["temp_c"], "to": deep["temp_c"] + 0.5}
+        assert c.post("/api/people/p1/insights/apply", json={"proposal": prop, "insight_id": "ap-deep-warmer-x", "source": "suggestion"}, headers=H).status_code == 200
+        assert next(p for p in c.get("/api/people/p1/rhythms", headers=H).json()[0]["phases"] if p["id"] == "deep")["temp_c"] == deep["temp_c"] + 0.5
+        r = c.post("/api/people/p1/insights/undo", json={"insight_id": "ap-deep-warmer-x"}, headers=H)
+        assert r.status_code == 200 and "→" in r.json()["undone"]
+        assert next(p for p in c.get("/api/people/p1/rhythms", headers=H).json()[0]["phases"] if p["id"] == "deep")["temp_c"] == deep["temp_c"]
+        assert c.post("/api/people/p1/insights/undo", json={"insight_id": "ap-deep-warmer-x"}, headers=H).status_code == 409   # once
+
+
+def test_undo_of_a_bedtime_change(tmp_path):
+    with make(tmp_path) as c:
+        rh = c.get("/api/people/p1/rhythms", headers=H).json()[0]
+        old = rh["schedule"]["bedtime"]
+        prop = {"rhythm_id": rh["id"], "schedule": "bedtime", "from": old, "to": "23:45"}
+        assert c.post("/api/people/p1/insights/apply", json={"proposal": prop, "insight_id": "guide-bedtime-x", "source": "guide"}, headers=H).status_code == 200
+        assert c.post("/api/people/p1/insights/undo", json={"insight_id": "guide-bedtime-x"}, headers=H).status_code == 200
+        assert c.get("/api/people/p1/rhythms", headers=H).json()[0]["schedule"]["bedtime"] == old
+
+
+def test_review_page_and_history_fields(tmp_path):
+    with make(tmp_path) as c:
+        r = c.get("/api/people/p1/review", headers=H)
+        assert r.status_code == 200
+        j = r.json()
+        assert {"date", "last", "feel", "review", "reviewing", "review_on", "basis", "suggestions", "applied"} <= set(j) and j["last"] is True
+        old = c.get("/api/people/p1/review?date=2026-01-01", headers=H).json()
+        assert old["last"] is False and old["suggestions"] == []
+        assert c.get("/api/people/p1/review?date=nope", headers=H).status_code == 400
+        for n in c.get("/api/people/p1/nights?count=3", headers=H).json():
+            assert n["reviewed"] in (True, False) and isinstance(n["applied"], int)
+
+
+def test_basis_names_only_what_was_recorded():
+    assert mo.basis({"has_data": True}, {}) == ["The bed: when you were on your side and its temperature, through the night"]
+    b = mo.basis({"adjustments": 2, "hot_flashes": 1, "hr_avg": 55, "settled_min": 300}, {"temp": "cold"})
+    assert "Your own changes: 2 on the dial or in the app" in b and "1 hot or cold flash" in b
+    assert "Your watch or ring: heart rate and sleep stages" in b and "Your check-in: too cold" in b
+
+
+def test_an_applied_change_belongs_to_the_night_that_had_just_ended(tmp_path):
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    with make(tmp_path) as c:
+        ctl = c.app.state.oura.c
+        ts = datetime(2026, 11, 20, 9, 9, tzinfo=ZoneInfo("America/New_York")).timestamp()
+        assert mo.applied_night(ctl, {"ts": ts, "night": "2026-11-15"}) == "2026-11-19"
+        assert mo.applied_night(ctl, {"night": "2026-11-15"}) == "2026-11-15"
+
+
+def test_applied_changes_read_in_the_persons_units_and_clock(tmp_path):
+    with make(tmp_path) as c:
+        p = c.app.state.oura.c.person("p1")
+        rh = p.rhythms[0]
+        ph = rh.phases[0]
+        p.settings.units = "F"
+        t = mo.change_text(p, {"proposal": {"rhythm_id": rh.id, "phase_id": ph.id, "field": "temp_c", "to": 29.44}, "before": 27.22})
+        assert t == f"{rh.name} · {ph.name}: 81°F → 85°F"
+        p.settings.clock = "12"
+        assert mo.change_text(p, {"proposal": {"rhythm_id": rh.id, "schedule": "bedtime", "to": "00:00"}, "before": "23:00"}) == f"{rh.name}: bedtime 11:00 PM → 12:00 AM"

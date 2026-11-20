@@ -1345,3 +1345,23 @@ button.bedpick-half:focus-visible,.bedpick-whole:focus-visible{outline:2px solid
 
 /* the night screen on short phones (about 700px tall or less): the dial shrinks to the space left instead of sliding under the buttons */
 @media (max-height:700px){.app:not(.tab) .simple{gap:10px}.app:not(.tab) .simple .mid{overflow:hidden}.app:not(.tab) .simple .dial{width:auto;height:100%;max-width:min(70vw,270px)}.app:not(.tab) .simple .dial .t{font-size:min(24vw,11vh,100px)}.app:not(.tab) .simple .dial .s{font-size:12.5px}.app:not(.tab) .simple .col{gap:8px}.app:not(.tab) .simple .steps{gap:8px}.app:not(.tab) .simple .col button,.app:not(.tab) .simple .steps button{min-height:48px;height:auto;font-size:15px}.app:not(.tab) .simple .steps button{width:72px;font-size:28px}}
+
+/* Sleep: Night / Review / History sections */
+.sleep-tabs{margin:2px 0 10px}
+.sleep-tabs button{min-height:40px;font-size:14px}
+.sleep-tabs button[aria-selected="true"]{background:var(--raise);color:var(--text)}
+.srev,.shist{display:grid;gap:10px}
+.srev-text{margin:0;font-size:14.5px;line-height:1.5;white-space:pre-wrap}
+.srev-why{justify-self:start;min-height:44px}
+.srev-basis{margin:0;padding-left:18px;font-size:13.5px;line-height:1.55;color:var(--mute)}
+.srev-applied{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:14px}
+.shist-row{display:flex;align-items:center;gap:12px;width:100%;padding:12px 2px;min-height:56px;border:0;border-bottom:1px solid var(--line);background:none;color:var(--text);font:inherit;text-align:left;cursor:pointer}
+.shist-row:last-child{border-bottom:0}
+.shist-row:disabled{cursor:default;color:var(--mute)}
+.shist-d{width:42px;flex:none;display:grid;justify-items:center}
+.shist-d b{font-family:var(--brand);font-size:19px;font-weight:600;line-height:1.1}
+.shist-d span{font-size:11px;color:var(--mute);text-transform:uppercase;letter-spacing:.05em}
+.shist-mid{flex:1;display:grid;gap:5px;min-width:0;font-size:14.5px}
+.shist-tags{display:flex;gap:6px;flex-wrap:wrap}
+.shist-tag{font-size:12px;padding:2px 8px;border-radius:8px;background:var(--line);color:var(--mute)}
+.shist-tag.good{color:var(--good)}.shist-tag.tide{color:var(--cool)}.shist-tag.ember{color:var(--warm)}
