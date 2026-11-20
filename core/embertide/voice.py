@@ -68,6 +68,14 @@ PHRASES: dict[str, dict[str, list[Variant]]] = {
         "cheeky": [("Rise and shine, {name} (or at least rise)", "{summary}."), ("Good morning, {name}. The bed has notes.", "{summary}."),
                    ("Morning, {name}! The night report is in.", "{summary}.")],
     },
+    "morning_suggest": {   # the morning summary's title when suggestions for tonight are waiting
+        "calm": [("Morning, {name}. {n} suggestion{s} for tonight", ""), ("Good morning, {name}: {n} suggestion{s} for tonight", ""),
+                 ("Your night, {name}, and {n} suggestion{s}", "")],
+        "friendly": [("Morning, {name}! {n} suggestion{s} for tonight", ""), ("Morning, {name}. {n} idea{s} for tonight", ""),
+                     ("Hope you slept well, {name}. {n} suggestion{s} inside", "")],
+        "cheeky": [("Morning, {name}. The bed has {n} suggestion{s}", ""), ("Rise and shine, {name}: {n} suggestion{s} for tonight", ""),
+                   ("Morning, {name}! {n} bright idea{s} for tonight", "")],
+    },
     "checkin": {     # the end of the morning summary: one action, tap to check in
         "calm": ["How did it feel? Tap to check in.", "How was the temperature? Tap to check in.", "Tap to say how the night felt."],
         "friendly": ["How did it feel? One tap helps it learn.", "Too warm, too cool or just right? Tap to say.",

@@ -10,7 +10,7 @@ from embertide import voice
 from embertide.store import Store
 from embertide.voice import ALERTS, PHRASES, TONES, pick, say, slots_of
 
-SAMPLE = {"name": "Alex", "minutes": 23, "summary": "7 h 50 min in bed · settled in 12 min", "who": "Biscuit",
+SAMPLE = {"name": "Alex", "minutes": 23, "s": "s", "summary": "7 h 50 min in bed · settled in 12 min", "who": "Biscuit",
           "when": "2:40 AM–3:10 AM", "side": "left side", "phase": "Deep", "deg": "2°F", "source": "the phone",
           "n": 3, "look": 7, "step": "1 °F", "detail": "no answer", "lines": "2:06 AM: Can't reach the bed.",
           "what": "Fan speed out of range", "advice": "Check the hub's vents aren't blocked.",

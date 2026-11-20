@@ -421,7 +421,7 @@ async def test_a_side_that_ignores_commands_is_reported_once(tmp_path):
 
 
 async def test_calibration_morning_has_one_tap_check_in(tmp_path):
-    """During the calibration week the morning message carries Too cold / Just right / Too warm; a tap stores it for
+    """The morning message carries Too cold / Just right / Too warm; a tap stores it for
     the night that just ended (tunes Autopilot), from the app or a link button alike."""
     from embertide.notify import Action
     n = Night(tmp_path, "2026-11-05T22:00")
@@ -436,9 +436,9 @@ async def test_calibration_morning_has_one_tap_check_in(tmp_path):
     done = n.c.notifier.use_action(code)
     assert done and done["done"] == "Noted: too warm"
     assert n.store.get(f"feedback:{n.p1.id}:2026-11-05")["temp"] == "warm"
-    n.p1.settings.autopilot.learn_skip = True                          # calibration over: the plain message
+    n.p1.settings.autopilot.learn_skip = True                          # calibration over: the check-in stays, every morning
     m2 = n.c.notifier._morning(n.p1, "2026-11-05", n.clock.now_ts())
-    assert m2 and not m2.actions
+    assert m2 and [a.act for a in m2.actions] == ["feel_cold", "feel_right", "feel_warm"]
 
 
 def test_feedback_without_a_date_is_for_the_night_that_just_ended(tmp_path):

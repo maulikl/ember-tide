@@ -37,7 +37,8 @@ def out(answer=LONG, model="test-model"):
 async def test_sent_once_with_trimmed_body_and_link(tmp_path):
     n = await morning(tmp_path)
     m = n.c.notifier.review_message(n.p1, "2026-11-05", out())
-    assert m and m.kind == "review" and m.title == "Your night, reviewed" and m.link == "/" and m.person == n.p1.id
+    assert m and m.kind == "review" and m.title == "Your night, reviewed" and m.link == "/sleep#review" and m.person == n.p1.id
+    assert [(a.label, a.act, a.ref) for a in m.actions] == [("Read review", "open", "/sleep#review"), ("Not now", "card_later", "review-2026-11-05")]
     assert m.body == "You settled in quickly and the bed followed your plan well. Autopilot made no changes overnight."
     assert n.c.notifier.review_message(n.p1, "2026-11-05", out()) is None               # same night: not twice
     assert n.c.notifier.review_message(n.p1, "2026-11-06", out())                        # another night is fine
@@ -103,3 +104,82 @@ def test_tonight_card_endpoints_and_dismiss(tmp_path):
         assert c.get("/api/people/p1/autopilot/ai-review/last").json()["answer"] == "Fine night."
         c.post("/api/sim", json={"jump_to": "2026-11-07T09:00"}, headers=H)                # a day later: that review is old
         assert c.get("/api/people/p1/autopilot/ai-review/last").json() == {}
+
+
+# ---------- the morning summary with suggestions, the review joining it, and its buttons ----------
+
+SUGG = [{"id": "ap-late-warmer-2026-11-05", "source": "suggestion", "kind": "pattern", "title": "Warmer late night?",
+         "detail": "You warmed up near the end on 3 of 7 nights.", "proposal": {"rhythm_id": "r", "phase_id": "late", "field": "temp_c", "to": 28}}]
+
+
+async def test_morning_with_suggestions_says_how_many_and_opens_them(tmp_path, monkeypatch):
+    n = await morning(tmp_path)
+    monkeypatch.setattr("embertide.engine.morning.waiting_suggestions", lambda *a, **k: list(SUGG))
+    m = n.c.notifier._morning(n.p1, "2026-11-05", n.clock.now_ts())
+    assert m and "1 suggestion" in m.title and "suggestions" not in m.title
+    assert "Warmer late night?" in m.body and "check in" not in m.body.lower()
+    assert m.link == "/sleep#review"
+    assert [(a.label, a.act, a.ref) for a in m.actions] == [("See suggestions", "open", "/sleep#review"), ("Not now", "card_later", "sugg-2026-11-05")]
+    monkeypatch.setattr("embertide.engine.morning.waiting_suggestions", lambda *a, **k: SUGG * 2)
+    assert "2 suggestions" in n.c.notifier._morning(n.p1, "2026-11-05", n.clock.now_ts()).title
+
+
+async def test_morning_without_suggestions_always_has_the_check_in(tmp_path, monkeypatch):
+    n = await morning(tmp_path)
+    monkeypatch.setattr("embertide.engine.morning.waiting_suggestions", lambda *a, **k: [])
+    n.c.autopilot.learning = lambda p, now: {"done": True}
+    m = n.c.notifier._morning(n.p1, "2026-11-05", n.clock.now_ts())
+    assert [a.act for a in m.actions] == ["feel_cold", "feel_right", "feel_warm"] and m.link is None
+
+
+async def test_review_joins_an_unanswered_morning_summary_quietly(tmp_path, monkeypatch):
+    n = await morning(tmp_path)
+    nt = n.c.notifier
+    monkeypatch.setattr("embertide.engine.morning.waiting_suggestions", lambda *a, **k: [])
+    first = nt._morning(n.p1, "2026-11-05", n.clock.now_ts())
+    m = nt.review_message(n.p1, "2026-11-05", out(), now=n.clock.now_ts() + 120)
+    assert m.kind == "morning" and m.update and m.title == first.title and m.link == "/sleep#review"
+    assert "Autopilot made no changes overnight." in m.body and [a.act for a in m.actions] == ["feel_cold", "feel_right", "feel_warm"]
+    assert nt._allowed(m, n.clock.now_ts()) is None                       # outside the day's one-morning limit
+
+
+async def test_review_is_its_own_notification_once_the_morning_was_answered_or_is_old(tmp_path, monkeypatch):
+    from embertide.notify import save_feel
+    n = await morning(tmp_path)
+    nt = n.c.notifier
+    monkeypatch.setattr("embertide.engine.morning.waiting_suggestions", lambda *a, **k: [])
+    nt._morning(n.p1, "2026-11-05", n.clock.now_ts())
+    save_feel(n.c, n.p1.id, "right", n.clock.now_ts(), night="2026-11-05")
+    m = nt.review_message(n.p1, "2026-11-05", out(), now=n.clock.now_ts() + 60)
+    assert m.kind == "review" and not m.update
+    nt._morning(n.p1, "2026-11-06", n.clock.now_ts())
+    late = nt.review_message(n.p1, "2026-11-06", out(), now=n.clock.now_ts() + 45 * 60)
+    assert late.kind == "review"
+
+
+async def test_not_now_puts_the_card_away_on_every_device(tmp_path):
+    from embertide.engine import morning as mo
+    from embertide.notify import Action
+    n = await morning(tmp_path)
+    nt = n.c.notifier
+    done = nt.use_action(nt.new_action(n.p1.id, Action("Not now", "card_later", ref="review-2026-11-05")))
+    assert done["done"].startswith("Okay")
+    assert "review-2026-11-05" in mo.dismissed(n.c, n.p1.id)
+    assert n.store.get(f"ai_review_dismissed:{n.p1.id}:2026-11-05")          # the older review card hides too
+    nt.use_action(nt.new_action(n.p1.id, Action("Not now", "card_later", ref="nonsense")))   # ignored, no error
+    assert set(mo.dismissed(n.c, n.p1.id)) == {"review-2026-11-05"}
+
+
+def test_open_buttons_become_links_on_every_channel():
+    from embertide.notify import Action, Notifier
+    assert Notifier._opens(Action("See", "open", ref="/sleep#review"))
+    assert not Notifier._opens(Action("See", "open", ref="//evil.example"))
+    assert not Notifier._opens(Action("See", "open", ref="https://evil.example"))
+    assert not Notifier._opens(Action("Too cold", "feel_cold"))
+
+
+def test_dismiss_card_endpoint(tmp_path):
+    with make(tmp_path) as tc:
+        assert tc.post("/api/people/p1/morning/dismiss", json={"id": "sugg-2026-11-05"}, headers=H).json() == {"ok": True, "night": "2026-11-05"}
+        assert tc.post("/api/people/p1/morning/dismiss", json={"id": "../x"}, headers=H).status_code == 422
+        assert tc.app.state.oura.c.store.get("morning_dismissed:p1").keys() == {"sugg-2026-11-05"}

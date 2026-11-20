@@ -28,7 +28,7 @@ object EmberPush {
     private const val P_ERR = "push_error"
     private val ALLOWED = setOf("pause", "skip", "start_now", "resume", "manual_off", "feel_cold", "feel_right", "feel_warm",
         "pet_yes", "pet_me", "pet_unsure", "away_away", "away_night", "away_home", "away_back", "away_still",
-        "care_done", "care_later")
+        "care_done", "care_later", "open", "card_later")
     /** Buttons about one night (the server's NIGHT_ACTS): the notification must go when that night ends. */
     private val NIGHT_BOUND = setOf("pause", "skip", "start_now")
 
@@ -153,6 +153,7 @@ object EmberPush {
             .setContentIntent(open)
             .setAutoCancel(true)
             .setColor(0xFF5FB8B0.toInt())
+            .setOnlyAlertOnce(m.optBoolean("quiet", false))   // an update of one already shown (the review joining the morning): no second buzz
         val acts = m.optJSONArray("actions")
         val person = m.optString("person").ifEmpty { Ember.person(c) }
         var nightBound = false
@@ -161,6 +162,14 @@ object EmberPush {
             val act = a.optString("act")
             if (act !in ALLOWED) continue                     // only things the app knows how to do
             if (act in NIGHT_BOUND) nightBound = true
+            if (act == "open") {                              // a button that opens a page in the app (Read review, See suggestions)
+                val page = EmberLink.clean(a.optString("ref")) ?: continue
+                val go = Intent(c, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                    .putExtra(MainActivity.EXTRA_LINK, page)
+                val pi = PendingIntent.getActivity(c, id * 4 + i, go, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+                b.addAction(Notification.Action.Builder(null, a.optString("label").take(40), pi).build())
+                continue
+            }
             val intent = Intent(c, FlashNotifier.Receiver::class.java).setAction("app.embertide.NOTIF_ACT")
                 .putExtra("act", act).putExtra("minutes", a.optInt("minutes", 0)).putExtra("label", a.optString("label").take(40))
                 .putExtra("person", person).putExtra("nid", id).putExtra("ref", a.optString("ref").take(40))
@@ -194,6 +203,11 @@ object EmberPush {
             }
             else if (act.startsWith("care_")) throw IllegalArgumentException("no job")
             else if (act == "manual_off") Ember.sideCall(c, pid, "POST", "/api/people/$pid/adjust/clear?source=notification", null)
+            else if (act == "card_later" && ref.matches(Regex("(night|review|sugg)-\\d{4}-\\d{2}-\\d{2}"))) {   // "Not now": the card is put away everywhere
+                Ember.sideCall(c, pid, "POST", "/api/people/$pid/morning/dismiss", JSONObject().put("id", ref).toString())
+                confirm = "Okay. It's kept under Sleep, Review"
+            }
+            else if (act == "card_later") throw IllegalArgumentException("no card")
             else if (act.startsWith("feel_"))           // the morning check-in: how the temperature felt last night
                 Ember.sideCall(c, pid, "POST", "/api/people/$pid/feedback", JSONObject().put("temp", act.removePrefix("feel_")).toString())
             else if (act.startsWith("pet_") && ref.matches(Regex("[A-Za-z0-9]{1,40}")))   // "was that the dog?" answered from the notification

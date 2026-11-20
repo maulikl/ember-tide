@@ -187,14 +187,14 @@ async def test_morning_summary_goes_to_the_sleeper_only_with_the_check_in_button
     assert not r.sent(person="p2")                                                # nothing about Left reaches Right
 
 
-async def test_morning_summary_after_calibration_has_no_buttons_and_is_late_proof(tmp_path, good_night):
+async def test_morning_summary_after_calibration_keeps_the_check_in_and_is_late_proof(tmp_path, good_night):
     r, snap = await rig(tmp_path)
     sch = tonight(snap, r)
     r.put(snap, "p1", state="done")
     assert await r.observe(snap, at=sch["end"] + 5 * H) == []                      # more than 4 h late: not sent at all
     assert not r.got
     await r.observe(snap, at=sch["end"] + 3 * H)
-    assert r.sent("morning")[0].actions == []
+    assert r.sent("morning")[0].actions == ["Too cold", "Just right", "Too warm"]
 
 
 async def test_no_morning_summary_without_a_night_in_bed_or_when_marked_away(tmp_path, monkeypatch):

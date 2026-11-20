@@ -102,6 +102,10 @@ class ProfileBody(BaseModel):
 MAX_RHYTHMS = 12
 
 
+class CardBody(BaseModel):
+    id: str = Field(..., max_length=40)                  # a morning card: night-<date> | review-<date> | sugg-<date>
+
+
 class FeedbackBody(BaseModel):
     date: str | None = Field(None, pattern=r"^\d{4}-\d{2}-\d{2}$")         # the night (evening date); left out = the night that just ended (a notification button)
     temp: Literal["cold", "right", "warm"] | None = None
@@ -591,6 +595,17 @@ def build_router(app_state) -> APIRouter:
         c.store.put(f"feedback:{pid}:{b.date}", merged)
         c.store.event(c.clock.now_ts(), "feedback", pid, "app", night=b.date, temp=b.temp, note=b.note, rested=b.rested)
         return {"ok": True}
+
+    @r.post("/people/{pid}/morning/dismiss")
+    async def dismiss_card(pid: str, b: CardBody):
+        """Put one morning card away (swiped on Tonight, or "Not now" on a notification): gone on every device."""
+        find(pid)
+        from .engine import morning
+        try:
+            night = morning.dismiss(ctl(), pid, b.id, ctl().clock.now_ts())
+        except ValueError:
+            raise HTTPException(422, "unknown card")
+        return {"ok": True, "night": night}
 
     # ---------- history / events / export ----------
     def _viewer(request: Request):
