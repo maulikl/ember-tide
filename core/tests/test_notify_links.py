@@ -7,7 +7,7 @@ from embertide.notify import DEFAULT_LINKS, Message, link_for
 from notify_rig import Rig
 
 EXPECT = {
-    "morning": "/sleep", "digest": "/sleep", "pet_question": "/", "away_check": "/", "maintenance": "/settings#care",
+    "morning": "/", "digest": "/sleep", "pet_question": "/", "away_check": "/", "maintenance": "/settings#care",
     "hub": "/settings#hub", "problem": "/", "left_on": "/", "empty_side": "/", "not_started": "/", "wearable": "/settings#watch",
 }
 

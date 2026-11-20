@@ -145,7 +145,7 @@ class Action:
 # message asks for it). The front page is Tonight, where the pet and away questions are answered.
 REVIEW_PAGE = "/sleep#review"          # the night's review and tonight's suggestions
 FOLD_REVIEW_S = 30 * 60               # a review this soon after an unanswered morning summary joins it
-DEFAULT_LINKS = {"review": REVIEW_PAGE, "morning": "/sleep", "digest": "/sleep", "pet_question": "/", "pet_live": "/", "away_check": "/", "maintenance": "/settings#care",
+DEFAULT_LINKS = {"review": REVIEW_PAGE, "morning": "/", "digest": "/sleep", "pet_question": "/", "pet_live": "/", "away_check": "/", "maintenance": "/settings#care",
                  "hub": "/settings#hub", "leak": "/", "problem": "/", "wearable": "/settings#watch", "account": "/settings"}
 # What a Studio page is for someone without an owner account (Studio's owner tools aren't theirs)
 PHONE_FOR_STUDIO = {"/studio/hub": "/settings#hub", "/studio/devices": "/", "/studio/notifications": "/settings",

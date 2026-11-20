@@ -17,8 +17,7 @@ import Simple from "./Simple";
 import AwayNote from "../components/AwayNote";
 import { CareTonight } from "../components/Care";
 import PetQuestion from "../components/PetQuestion";
-import ReviewNote from "../components/ReviewNote";
-import GuideNote from "../components/GuideNote";
+import MorningCards from "../components/MorningCards";
 import { useHardwareKeyboard } from "../keyboard";
 
 function BigTemp({ c, units, color, size, stale }: { c: number | null; units: "F" | "C"; color?: string; size?: number; stale?: boolean }) {
@@ -314,16 +313,16 @@ export default function Tonight({ setSimpleOn }: { setSimpleOn: (v: boolean) => 
       </div>
       <div className="tn-lower">
 
+      {/* "This morning": last night, its review and tonight's suggestions, all together (each swipes away). */}
+      {v === "me" && <MorningCards person={me.id} name={me.name} state={me.night.state} units={me.settings.units} phases={me.phases} />}
       {/* At most one calm note at a time. Priority, highest first: can't reach the server > the bed isn't reporting >
           a bed hub fault (those three are App's banners, and hide everything here) > away (the note or the morning
-          question) > a pet question > last night's review > a care job due > a suggestion (the Today card's bold line). Each piece fetches
+          question) > a pet question > a care job due > a suggestion (the Today card's bold line). Each piece fetches
           its own data, so the order is kept in CSS: only the first rendered child of .notes shows (theme.css). */}
       <div className="notes">
         <AwayNote person={target} me={me} isOwner={isOwner} tz={snap.tz} />
         {v === "me" && !me.presence.present && <PetQuestion person={me.id} />}
-        {v === "me" && <ReviewNote person={me.id} on={!!me.settings.autopilot?.ai_review} state={me.night.state} units={me.settings.units} phases={me.phases} />}
         <CareTonight running={snap.people.some(p => p.night.state === "rhythm" || p.night.state === "out_of_bed_hold")} />
-        {v === "me" && <GuideNote person={me.id} />}
       </div>
       {v === "both" && n.guest ? (
         <GuestCard person={target} />

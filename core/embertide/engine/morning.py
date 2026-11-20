@@ -64,3 +64,38 @@ def dismiss(c, pid: str, card: str, now: float) -> str:
     if kind == "review":
         c.store.put(f"ai_review_dismissed:{pid}:{night}", now)
     return night
+
+
+REVIEW_WAIT_S = 15 * 60          # how long "Reviewing your night…" shows before giving up on a review that never came
+
+
+def feed(c, p, now: float) -> dict:
+    """The morning cards for Tonight: last night in brief (with the check-in), its review (ready, or still being
+    written), and tonight's suggestions. Cards the person put away are left out; nothing when they were away."""
+    from ..notify import summary_line
+    from .away import is_away, night_verdict
+    from .summary import summarize
+    night = last_night(c, now)
+    d = night.isoformat()
+    out: dict = {"night": d, "cards": []}
+    if is_away(c.store, p.id, now) or night_verdict(c, p, night)[0] == "away":
+        return out
+    gone = dismissed(c, p.id)
+    s = summarize(c.store, p, night, c.clock.tz, now)
+    if s and s.get("has_data") and s.get("in_bed_min") and not s.get("in_progress") and f"night-{d}" not in gone:
+        fb = c.store.get(f"feedback:{p.id}:{d}") or {}
+        out["cards"].append({"id": f"night-{d}", "kind": "night", "line": summary_line(s), "in_bed_min": s.get("in_bed_min"),
+                             "settle_min": s.get("time_to_settle_min"), "times_up": s.get("times_up") or 0, "feel": fb.get("temp")})
+    pol = p.settings.autopilot
+    if pol.ai_review and f"review-{d}" not in gone and not c.store.get(f"ai_review_dismissed:{p.id}:{d}"):
+        rv = c.store.get(f"ai_review:{p.id}:{d}") or {}
+        started = c.store.get(f"ai_review_started:{p.id}:{d}")
+        if rv.get("answer"):
+            out["cards"].append({"id": f"review-{d}", "kind": "review", "state": "ready", "answer": rv["answer"],
+                                 "model": rv.get("model"), "proposal": rv.get("proposal")})
+        elif started and now - float(started) < REVIEW_WAIT_S:
+            out["cards"].append({"id": f"review-{d}", "kind": "review", "state": "working"})
+    sugg = waiting_suggestions(c, p, now)
+    if sugg and f"sugg-{d}" not in gone:
+        out["cards"].append({"id": f"sugg-{d}", "kind": "sugg", "items": sugg})
+    return out

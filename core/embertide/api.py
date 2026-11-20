@@ -596,6 +596,12 @@ def build_router(app_state) -> APIRouter:
         c.store.event(c.clock.now_ts(), "feedback", pid, "app", night=b.date, temp=b.temp, note=b.note, rested=b.rested)
         return {"ok": True}
 
+    @r.get("/people/{pid}/morning")
+    async def morning_cards(pid: str):
+        """Tonight's morning cards: last night in brief with the check-in, its review, tonight's suggestions."""
+        from .engine import morning
+        return morning.feed(ctl(), find(pid), ctl().clock.now_ts())
+
     @r.post("/people/{pid}/morning/dismiss")
     async def dismiss_card(pid: str, b: CardBody):
         """Put one morning card away (swiped on Tonight, or "Not now" on a notification): gone on every device."""
