@@ -5,6 +5,26 @@ minor versions, and each entry says what to check when upgrading.
 
 ## Unreleased
 
+## 0.1.17
+
+Clearer mornings: the morning notification, Tonight and Sleep now work together. Update the server and the phone app
+together: the new notification buttons and screens need both.
+
+- **Morning check-in in the notification.** The morning notification has Too cold / Just right / Too warm every morning.
+  When suggestions are waiting it says how many, with See suggestions (opens Sleep, Review) and Not now.
+- **Tapping "Your night, reviewed" opens the review.** A review that finishes soon after an unanswered morning
+  notification is added to it quietly instead of sending a second one.
+- **"This morning" on Tonight.** Last night at a glance with a one-tap check-in, the night's review (shown straight away
+  while it's being written), and tonight's suggestions with Apply / Not now. Swipe a card away when you're done; it stays
+  gone on your other devices too.
+- **Sleep has Review and History.** Review shows the night's review and what it's based on, lets you change how the night
+  felt, and lists tonight's suggestions (Apply, Not now, Don't suggest this). Anything you applied can be undone there for
+  a week. History lists your last 30 nights with their check-ins and reviews; tap one to open it.
+- **A screen that needs a newer server no longer stays blank.** Unknown API addresses now answer "not found" instead of
+  the web page, so after an app update the screen shows its usual "couldn't load" message until the server is updated.
+- **The dial shows "Guest" in guest mode** instead of the usual sleeper's name. Re-install the dial firmware from Studio,
+  Devices, Dials to get it.
+
 ## 0.1.16
 
 Fixes from a walkthrough of every page with real data, and from a night with a dog on the bed.
