@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import __version__
@@ -376,6 +376,10 @@ def create_app(cfg: Config | None = None) -> FastAPI:
 
         @app.get("/{path:path}")
         async def spa(path: str):
+            # an API address this server doesn't have (an app newer than the server) is a plain 404, never the web
+            # page: a 200 page there was cached by the app's web view and kept breaking that screen after an update
+            if path == "api" or path.startswith("api/"):
+                return JSONResponse({"detail": "Not Found"}, status_code=404)
             # only files inside the built web app; "../" (also sent encoded as %2e%2e / %2F) never leaves it
             f = (root / path).resolve()
             if path and f.is_relative_to(root) and f.is_file():

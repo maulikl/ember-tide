@@ -40,3 +40,20 @@ def test_huge_bodies_are_refused(tmp_path):
                 yield b"x" * 65536
         r = c.post("/api/client-error", content=gen(), headers={"content-type": "application/json"})
         assert r.status_code in (400, 413), r.status_code     # refused part-way (FastAPI reports it as a bad body)
+
+
+def test_an_unknown_api_address_is_a_404_not_the_web_page(tmp_path):
+    """An app newer than its server asks for an address the server doesn't have: a 404, never the web page with a 200
+    (the app's web view cached that page and the screen kept failing after the server was updated)."""
+    web = tmp_path / "web"
+    (web / "assets").mkdir(parents=True)
+    (web / "index.html").write_text("<html>app</html>")
+    cfg = Config()
+    cfg.data_dir, cfg.tz, cfg.bed, cfg.web_dir, cfg.llm_url, cfg.auth = tmp_path / "data", "America/New_York", "sim", web, None, False
+    (tmp_path / "data").mkdir()
+    with TestClient(create_app(cfg)) as c:
+        for p in ("/api/people/p1/not-a-thing", "/api", "/api/"):
+            r = c.get(p)
+            assert r.status_code == 404 and "<html" not in r.text, p
+        assert c.get("/sleep").text == "<html>app</html>"                 # app pages still get the web page
+        assert c.get("/apiary").text == "<html>app</html>"
