@@ -470,3 +470,26 @@ async def test_button_codes_and_daily_counts_survive_a_restart(tmp_path):
     assert r.nt.peek_action(code) is not None                                # the button on the phone still works
     assert r.nt._count("p1", "left_on", r.now)[0] == 1                      # the count was not forgotten
     assert r.nt.send(msg(title="A second one")) and not r.nt.send(msg(title="A third one"))   # so the day's limit of 2 still holds
+
+
+OPEN = [Action("Read review", "open", ref="/sleep#review"), Action("Not now", "card_later", ref="review-2026-11-05")]
+
+
+async def test_open_buttons_are_plain_links_on_ntfy_and_home_assistant(tmp_path):
+    r = Rig(tmp_path, ntfy=True)
+    assert await send(r, Message("review", "Your night, reviewed", "A steady night.", "p1", list(OPEN)))
+    a = r.sent()[0].raw["actions"]
+    assert a[0] == {"action": "view", "label": "Read review", "url": "https://bed.example/sleep#review", "clear": True}
+    assert a[1]["action"] == "http" and a[1]["url"].startswith("https://bed.example/api/notify/act/")
+    r2 = Rig(tmp_path / "ha", ha=True)
+    assert await send(r2, Message("review", "Your night, reviewed", "A steady night.", "p1", list(OPEN)))
+    a2 = r2.sent()[0].raw["data"]["actions"]
+    assert a2[0] == {"action": "URI", "title": "Read review", "uri": "https://bed.example/sleep#review"}
+    assert a2[1]["uri"].startswith("https://bed.example/act#")
+
+
+async def test_a_quiet_update_carries_the_quiet_flag_to_the_app(tmp_path):
+    r = Rig(tmp_path)
+    r.phone("p1", "fcm")
+    assert await send(r, Message("morning", "Morning, Left", "A steady night.", "p1", [], update=True))
+    assert r.sent()[0].raw.get("quiet") is True

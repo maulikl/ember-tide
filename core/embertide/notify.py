@@ -34,7 +34,9 @@ from .units import clock_style, fmt_clock, fmt_temp
 log = logging.getLogger(__name__)
 ACTION_TTL_S = 12 * 3600
 APP_ACTS = {"pause", "skip", "start_now", "resume", "manual_off", "feel_cold", "feel_right", "feel_warm", "pet_yes", "pet_me", "pet_unsure",
-            "away_away", "away_night", "away_home", "away_back", "away_still", "care_done", "care_later"}   # the only things a notification button can do in the app
+            "away_away", "away_night", "away_home", "away_back", "away_still", "care_done", "care_later",
+            "open", "card_later"}   # the only things a notification button can do in the app
+OPEN_ACT = "open"        # a button that opens a page in the app (its `ref`), done by the phone itself, never by the server
 MAX_DEVICES = 6
 OFFLINE_AFTER_S = 300
 STALE_AFTER_S = 600
@@ -133,14 +135,17 @@ def save_feel(c, pid: str, temp: str, now: float, source: str = "app", night: st
 @dataclass
 class Action:
     label: str
-    act: str                 # tonight action: pause | skip | start_now | resume; feel_*; pet_yes | pet_me | pet_unsure
+    act: str                 # tonight action: pause | skip | start_now | resume; feel_*; pet_yes | pet_me | pet_unsure;
+                             # open (a page in the app); card_later (put a morning card away)
     minutes: int | None = None
-    ref: str | None = None   # what it's about (the pet question's id)
+    ref: str | None = None   # what it's about (the pet question's id; the page to open; the morning card)
 
 
 # Where a tap on a notification goes when the message doesn't name a page itself (phone screens; Studio only where a
 # message asks for it). The front page is Tonight, where the pet and away questions are answered.
-DEFAULT_LINKS = {"review": "/", "morning": "/sleep", "digest": "/sleep", "pet_question": "/", "pet_live": "/", "away_check": "/", "maintenance": "/settings#care",
+REVIEW_PAGE = "/sleep#review"          # the night's review and tonight's suggestions
+FOLD_REVIEW_S = 30 * 60               # a review this soon after an unanswered morning summary joins it
+DEFAULT_LINKS = {"review": REVIEW_PAGE, "morning": "/sleep", "digest": "/sleep", "pet_question": "/", "pet_live": "/", "away_check": "/", "maintenance": "/settings#care",
                  "hub": "/settings#hub", "leak": "/", "problem": "/", "wearable": "/settings#watch", "account": "/settings"}
 # What a Studio page is for someone without an owner account (Studio's owner tools aren't theirs)
 PHONE_FOR_STUDIO = {"/studio/hub": "/settings#hub", "/studio/devices": "/", "/studio/notifications": "/settings",
@@ -169,6 +174,7 @@ class Message:
     urgent: bool = False               # goes out even in quiet hours (still deduplicated and capped)
     link: str | None = None            # where a tap on a web notification goes (a page that fixes the problem); None = the app's front page
     subject: str | None = None         # who the message is about when it goes to someone else (reach: the person who can't be reached)
+    update: bool = False               # replaces a notification already shown (same kind): quietly, outside the day's limit
 
 
 def voice_say(kind: str, slots: dict, **kw):
@@ -368,7 +374,7 @@ class Notifier:
     def _allowed(self, m: Message, now: float) -> str | None:
         """None if this message may go out now, else why not: "held" (quiet hours), "duplicate", or "cap" (today's
         limit for its kind, or for the person all together)."""
-        if m.kind in EXEMPT:
+        if m.kind in EXEMPT or m.update:
             return None
         recent = self.store.get("notify_recent", []) or []
         if any(r[0] == m.person and r[1] == m.kind and r[2] == m.title and now - r[3] < DEDUP_S for r in recent):
@@ -387,7 +393,7 @@ class Notifier:
         return None
 
     def _sent(self, m: Message, now: float) -> None:
-        if m.kind in EXEMPT:
+        if m.kind in EXEMPT or m.update:
             return
         self._count(m.person or "household", m.kind, now, add=True)
         recent = [r for r in (self.store.get("notify_recent", []) or []) if now - r[3] < DEDUP_S]
@@ -1135,8 +1141,9 @@ class Notifier:
         return Message("away_check", t, b, person.id, actions=acts, priority=3, tags=["house"])
 
     def _morning(self, person, night: str, now: float) -> Message | None:
-        """The morning summary: the night in a line, anything held overnight, an open pet question, and one action
-        (tap to check in)."""
+        """The morning summary: the night in a line, anything held overnight and an open pet question. With suggestions
+        waiting for tonight it says how many, and its buttons open them (See suggestions) or put them away (Not now);
+        otherwise its buttons are the check-in (Too cold / Just right / Too warm), every morning."""
         from datetime import date
         from .engine.summary import summarize
         from .engine.away import is_away
@@ -1168,16 +1175,27 @@ class Notifier:
             q = petq.open_for(self.store, person.id, now)
             if q and self._once(f"petq:{q['id']}"):
                 extra.append(self._say("pet_question", self._pet_slots(q), person, now)[0])
-        body = " ".join([body, *extra, self._say("checkin", {}, person, now)])
-        # the calibration week: how the temperature felt, one tap from the notification (it tunes Autopilot)
-        acts = []
-        if not self.c.autopilot.learning(person, now)["done"]:
-            acts = [Action("Too cold", "feel_cold"), Action("Just right", "feel_right"), Action("Too warm", "feel_warm")]
-        return Message("morning", t, body, person.id, acts, priority=2, tags=["sunrise"])
+        from .engine.morning import waiting_suggestions
+        sugg = waiting_suggestions(self.c, person, now)
+        base = " ".join([body, *extra])
+        if sugg:
+            n = len(sugg)
+            t = self._say("morning_suggest", {"name": person.name, "n": n, "s": "" if n == 1 else "s"}, person, now)[0]
+            first = sugg[0]["title"].strip()
+            base = " ".join([body, *([first if first[-1:] in ".?!" else first + "."] if first else []), *extra])
+            acts = [Action("See suggestions", OPEN_ACT, ref=REVIEW_PAGE), Action("Not now", "card_later", ref=f"sugg-{night}")]
+            self.store.put(f"morning_sent:{person.id}", {"night": night, "ts": now, "title": t, "base": base, "sugg": True})
+            return Message("morning", t, base, person.id, acts, priority=2, tags=["sunrise"], link=REVIEW_PAGE)
+        # how the temperature felt, one tap from the notification (it tunes Autopilot)
+        acts = [Action("Too cold", "feel_cold"), Action("Just right", "feel_right"), Action("Too warm", "feel_warm")]
+        self.store.put(f"morning_sent:{person.id}", {"night": night, "ts": now, "title": t, "base": base, "sugg": False})
+        return Message("morning", t, " ".join([base, self._say("checkin", {}, person, now)]), person.id, acts, priority=2, tags=["sunrise"])
 
     def review_message(self, person, night: str, out: dict | None, now: float | None = None) -> Message | None:
-        """The AI review of a finished night as a notification: its first sentence or two. None when the person has this
-        switched off, is away, or there is nothing to say; otherwise at most once per person per night."""
+        """The AI review of a finished night as a notification: its first sentence or two, opening the review (Read review)
+        or putting its card away (Not now). None when the person has this switched off, is away, or there is nothing to
+        say; otherwise at most once per person per night. When the morning summary went out a short while ago and hasn't
+        been answered, the review is added to it instead (the same notification, updated quietly), not sent as another."""
         from datetime import date
         from .engine.away import is_away, night_verdict
         now = self.c.clock.now_ts() if now is None else now
@@ -1188,7 +1206,20 @@ class Notifier:
             return None                                   # not their night: nothing to review
         if not self._once(f"review:{person.id}:{night}"):
             return None
-        return Message("review", "Your night, reviewed", review_excerpt(answer), person.id, priority=2, tags=["memo"], link="/")
+        excerpt = review_excerpt(answer)
+        sent = self.store.get(f"morning_sent:{person.id}") or {}
+        answered = bool((self.store.get(f"feedback:{person.id}:{night}") or {}).get("temp")) or any(
+            k.endswith(night) for k in (self.store.get(f"morning_dismissed:{person.id}") or {}))
+        if sent.get("night") == night and 0 <= now - float(sent.get("ts") or 0) <= FOLD_REVIEW_S and not answered:
+            if sent.get("sugg"):
+                acts = [Action("See suggestions", OPEN_ACT, ref=REVIEW_PAGE), Action("Not now", "card_later", ref=f"sugg-{night}")]
+                body = f"{sent['base']} {excerpt}"
+            else:
+                acts = [Action("Too cold", "feel_cold"), Action("Just right", "feel_right"), Action("Too warm", "feel_warm")]
+                body = f"{sent['base']} {excerpt} {self._say('checkin', {}, person, now)}"
+            return Message("morning", sent["title"], body, person.id, acts, priority=2, tags=["sunrise"], link=REVIEW_PAGE, update=True)
+        acts = [Action("Read review", OPEN_ACT, ref=REVIEW_PAGE), Action("Not now", "card_later", ref=f"review-{night}")]
+        return Message("review", "Your night, reviewed", excerpt, person.id, acts, priority=2, tags=["memo"], link=REVIEW_PAGE)
 
     def send_review(self, person, night: str, out: dict | None) -> bool:
         """Called once the morning's background review has finished (and only then, never for a manual review)."""
@@ -1240,7 +1271,15 @@ class Notifier:
             return None
         e = self.c.engine_for(a["person"])
         now = self.c.clock.now_ts()
-        if a["act"] == "manual_off":
+        if a["act"] == OPEN_ACT:
+            pass                          # (opens a page: the phone does it; nothing to do here)
+        elif a["act"] == "card_later":
+            from .engine import morning
+            try:
+                morning.dismiss(self.c, a["person"], a.get("ref") or "", now)
+            except ValueError:
+                pass
+        elif a["act"] == "manual_off":
             if e.s.override and e.s.override.manual:
                 e.clear_override(now)
         elif a["act"].startswith("care_"):
@@ -1283,6 +1322,10 @@ class Notifier:
         if a["act"] == "pause" and e.s.pause_until:
             t = fmt_clock(e.s.pause_until, clock_style(self.c.person(a["person"]).settings), self.c.clock.tz)
             return f"Paused {name}'s side until {t}"
+        if a["act"] == "card_later":
+            return "Okay. It's kept under Sleep, Review"
+        if a["act"] == OPEN_ACT:
+            return "Opened"
         if a["act"].startswith("feel_"):
             return {"feel_cold": "Noted: too cold", "feel_right": "Noted: just right", "feel_warm": "Noted: too warm"}[a["act"]]
         if a["act"].startswith("care_"):
@@ -1430,6 +1473,11 @@ class Notifier:
         self.store.put(f"push:{pid}", keep)
         return len(keep) != len(items)
 
+    @staticmethod
+    def _opens(a: Action) -> bool:
+        """A button that opens a page in the app (a plain in-app path), not one the server acts on."""
+        return a.act == OPEN_ACT and bool(a.ref) and a.ref.startswith("/") and not a.ref.startswith("//")
+
     def _expires(self, m: Message) -> int | None:
         """Epoch seconds when the night a message is about ends, for messages with night-bound buttons (NIGHT_ACTS): the
         phone removes the notification then, so "Start anyway" can't be tapped the next morning. None for everything else."""
@@ -1445,7 +1493,7 @@ class Notifier:
         from . import webpush
         payload = {"t": "et", "v": 1, "kind": m.kind, "title": m.title, "body": m.body, "person": m.person,
                    "priority": m.priority, "ts": int(time.time()),
-                   "link": self._link(pid, m), **({"expires": exp} if (exp := self._expires(m)) else {}),
+                   "link": self._link(pid, m), **({"expires": exp} if (exp := self._expires(m)) else {}), **({"quiet": True} if m.update else {}),
                    "actions": [{"label": a.label, "act": a.act, "minutes": a.minutes, **({"ref": a.ref} if a.ref else {})}
                                for a in m.actions[:3] if a.act in APP_ACTS]}
         try:
@@ -1551,7 +1599,8 @@ class Notifier:
         if pub:
             body["click"] = pub + "/"
         if m.actions and m.person and pub:
-            body["actions"] = [{"action": "http", "label": a.label, "url": f"{pub}/api/notify/act/{self.new_action(m.person, a)}",
+            body["actions"] = [{"action": "view", "label": a.label, "url": pub + a.ref, "clear": True} if self._opens(a) else
+                               {"action": "http", "label": a.label, "url": f"{pub}/api/notify/act/{self.new_action(m.person, a)}",
                                 "method": "POST", "clear": True} for a in m.actions[:3]]
         headers = {"Authorization": f"Bearer {s['token']}"} if s.get("token") else {}
         c = self._client()
@@ -1574,9 +1623,11 @@ class Notifier:
         lis = self.ha_listeners.get(s["url"].rstrip("/"))
         if m.actions and m.person and lis and lis.connected:
             # one tap: HA tells us which button was pressed over its event bus, so the phone never has to reach this server
-            data["actions"] = [{"action": f"ET_{self.new_action(m.person, a)}", "title": a.label} for a in m.actions[:3]]
+            data["actions"] = [{"action": "URI", "title": a.label, "uri": pub + a.ref} if self._opens(a) and pub else
+                               {"action": f"ET_{self.new_action(m.person, a)}", "title": a.label} for a in m.actions[:3] if pub or not self._opens(a)]
         elif m.actions and m.person and pub:
-            data["actions"] = [{"action": "URI", "title": a.label, "uri": f"{pub}/act#{self.new_action(m.person, a)}"} for a in m.actions[:3]]
+            data["actions"] = [{"action": "URI", "title": a.label, "uri": pub + a.ref if self._opens(a) else f"{pub}/act#{self.new_action(m.person, a)}"}
+                               for a in m.actions[:3]]
         c = self._client()
         try:
             r = await c.post(f"{s['url'].rstrip('/')}/api/services/notify/{service}", json={"title": m.title, "message": m.body, "data": data},
@@ -1594,7 +1645,7 @@ class Notifier:
         pub = self.public_url
         acts = []
         if m.person and pub:     # buttons open the one-tap confirm page (iPhone shows none; tapping opens the app)
-            acts = [{"action": f"a{i}", "title": a.label, "url": f"{pub}/act#{self.new_action(m.person, a)}"}
+            acts = [{"action": f"a{i}", "title": a.label, "url": pub + a.ref if self._opens(a) else f"{pub}/act#{self.new_action(m.person, a)}"}
                     for i, a in enumerate(m.actions[:2]) if a.act in APP_ACTS]
         name = f"web · {d.get('device')}"
         try:

@@ -204,7 +204,7 @@ def test_every_notification_phrase_fits_a_phone_in_every_tone(kind):
              "when": "10:40 PM–11:10 PM", "side": "Right", "detail": "no answer from the broker", "lines": "2:06 AM: Can't reach the bed. 3:10 AM: Right bed sensor stopped updating.",
              "what": "Purification tablets are due", "advice": "Check the hub's vents aren't blocked and follow the maker's steps.",
              "why": "Keeps the water in the hub clean.", "more": " 2 other jobs are due too.", "day": "Wednesday",
-             "service": "Withings", "hours": 12, "free": "600 MB", "n": 12,
+             "service": "Withings", "hours": 12, "free": "600 MB", "n": 12, "s": "s",
              "device": "your watch or ring", "now": "74 °C", "want": "68 °C",
              "sign": "Your phone counted 1250 steps since then"}
     want = voice.slots_of(voice.PHRASES[kind]["calm"][0])
