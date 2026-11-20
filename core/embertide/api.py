@@ -506,9 +506,16 @@ def build_router(app_state) -> APIRouter:
         p = find(pid)
         now = c.clock.now_ts()
         out = []
+        applied: dict[str, int] = {}
+        from .engine.morning import applied_night
+        for a in (c.store.get(f"applied_insights:{pid}", {}) or {}).values():
+            if (an := applied_night(c, a)):
+                applied[an] = applied.get(an, 0) + 1
         for s in recent(c.store, p, c.clock.tz, now, max(1, min(30, count))):
             n = hide_away_night(c.store, pid, s, now, c.clock.tz)
-            out.append(lean_summary(c.store, p, n, c.clock.tz, now) if n is s else n)
+            n = lean_summary(c.store, p, n, c.clock.tz, now) if n is s else n
+            # for History: was the night reviewed, and how many suggestions were applied from it
+            out.append({**n, "reviewed": bool((c.store.get(f"ai_review:{pid}:{n['date']}") or {}).get("answer")), "applied": applied.get(n["date"], 0)})
         return out
 
     @r.get("/people/{pid}/night")

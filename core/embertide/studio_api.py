@@ -55,6 +55,10 @@ class GroupBody(BaseModel):
     parts: list[GroupPart] = Field(min_length=1, max_length=2)
 
 
+class UndoBody(BaseModel):
+    insight_id: str = Field(..., max_length=80)
+
+
 class ApplyBody(BaseModel):
     proposal: dict
     source: str = "studio"
@@ -682,6 +686,39 @@ def build_studio_router(state) -> APIRouter:
         return out
 
 
+    @r.post("/people/{pid}/insights/undo")
+    async def undo_insight(pid: str, b: UndoBody):
+        """Put back what an applied suggestion changed (within a week of applying it, from Sleep → Review)."""
+        from .engine.morning import UNDO_DAYS
+        p = person(pid)
+        c = ctl()
+        applied = c.store.get(f"applied_insights:{pid}", {})
+        a = applied.get(b.insight_id)
+        now = c.clock.now_ts()
+        if not a or a.get("before") is None or now - float(a.get("ts") or 0) >= UNDO_DAYS * 86400:
+            raise HTTPException(409, "This change can't be undone here any more. Change it under Rhythm.")
+        back = {**a["proposal"], "from": a["proposal"].get("to"), "to": a["before"]}
+        try:
+            what = apply_schedule(p, back) or apply_proposal(p, back, c.household)
+        except KeyError as e:
+            raise HTTPException(409, f"Couldn't undo: {e}")
+        c.reload_household(c.household)
+        c.store.event(now, "rhythm_changed", pid, "undo", change=what)
+        applied.pop(b.insight_id, None)
+        c.store.put(f"applied_insights:{pid}", applied)
+        from .engine.morning import change_text
+        return {"ok": True, "undone": change_text(p, {"proposal": back, "before": a["proposal"].get("to"), "change": what})}
+
+    @r.get("/people/{pid}/review")
+    async def review_page(pid: str, date: str | None = None):
+        """Sleep → Review for one night (default: the night that just ended)."""
+        from .engine.morning import last_night, review_page as page
+        p = person(pid)
+        d = _day(date) if date else last_night(ctl(), ctl().clock.now_ts())
+        if not d:
+            raise HTTPException(422, "which night?")
+        return page(ctl(), p, d, ctl().clock.now_ts())
+
     @r.post("/people/{pid}/insights/dismiss")
     async def dismiss_insight(pid: str, b: GuideDismissBody):
         """"Not now" on an insight card: hidden on every device of this person until its suggestion/title changes (or 14 days for info cards)."""
@@ -698,6 +735,8 @@ def build_studio_router(state) -> APIRouter:
     @r.post("/people/{pid}/insights/apply")
     async def apply(pid: str, b: ApplyBody):
         p = person(pid)
+        from .engine.morning import current_value
+        before = current_value(p, b.proposal)
         try:
             what = apply_schedule(p, b.proposal) or apply_proposal(p, b.proposal, ctl().household)
         except KeyError as e:
@@ -707,7 +746,8 @@ def build_studio_router(state) -> APIRouter:
         if b.insight_id:
             nights = [n for n in recent(ctl().store, p, ctl().clock.tz, ctl().clock.now_ts(), 7) if n.get("has_data") and not n.get("in_progress")]
             applied = ctl().store.get(f"applied_insights:{pid}", {})
-            applied[b.insight_id] = {"ts": ctl().clock.now_ts(), "night": max((n["date"] for n in nights), default=""), "change": what, "proposal": b.proposal}
+            applied[b.insight_id] = {"ts": ctl().clock.now_ts(), "night": max((n["date"] for n in nights), default=""), "change": what, "proposal": b.proposal,
+                                     "before": before}
             ctl().store.put(f"applied_insights:{pid}", applied)
         return {"ok": True, "applied": what}
 

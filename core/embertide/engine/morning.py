@@ -99,3 +99,94 @@ def feed(c, p, now: float) -> dict:
     if sugg and f"sugg-{d}" not in gone:
         out["cards"].append({"id": f"sugg-{d}", "kind": "sugg", "items": sugg})
     return out
+
+
+UNDO_DAYS = 7
+FEEL_WORDS = {"cold": "too cold", "right": "just right", "warm": "too warm"}
+
+
+def applied_night(c, a: dict) -> str | None:
+    """The night an applied suggestion came from: the one that had just ended when it was applied. (The record's own
+    "night" is the newest finished night it had seen, which can lag on a lie-in morning.)"""
+    return last_night(c, float(a["ts"])).isoformat() if a.get("ts") else a.get("night")
+
+
+def change_text(p, a: dict) -> str | None:
+    """An applied change in the person's units and clock: "Weeknights · Late night: 81°F → 85°F", "Weeknights:
+    bedtime 11:00 PM → 12:00 AM"."""
+    from datetime import time as _time
+    from ..units import clock_style, fmt_clock, fmt_temp
+    prop = a.get("proposal") or {}
+    rh = next((r for r in p.rhythms if r.id == prop.get("rhythm_id")), None)
+    old = a.get("before") if a.get("before") is not None else prop.get("from")
+    if rh and prop.get("schedule") in ("bedtime", "wake"):
+        def t(v):
+            try:
+                hh, mm = str(v).split(":")
+                return fmt_clock(_time(int(hh), int(mm)), clock_style(p.settings))
+            except (ValueError, TypeError):
+                return str(v)
+        return f"{rh.name}: {prop['schedule']} {t(old) + ' → ' if old else ''}{t(prop.get('to'))}"
+    ph = next((x for x in (rh.phases if rh else []) if x.id == prop.get("phase_id")), None)
+    if rh and ph and prop.get("field") == "temp_c":
+        u = p.settings.units
+        return f"{rh.name} · {ph.name}: {fmt_temp(float(old), u) + ' → ' if old is not None else ''}{fmt_temp(float(prop['to']), u)}"
+    return a.get("change")
+
+
+def current_value(p, prop: dict):
+    """What a proposal would change, as it is now (kept with an applied suggestion so it can be undone)."""
+    for rh in p.rhythms:
+        if rh.id != (prop or {}).get("rhythm_id"):
+            continue
+        if prop.get("schedule") in ("bedtime", "wake"):
+            return getattr(rh.schedule, prop["schedule"])
+        for ph in rh.phases:
+            if ph.id == prop.get("phase_id") and prop.get("field"):
+                return getattr(ph, prop["field"], None)
+    return None
+
+
+def basis(s: dict, fb: dict) -> list[str]:
+    """What a night's review is based on, in plain words, from what was actually recorded that night."""
+    out = ["The bed: when you were on your side and its temperature, through the night"]
+    n = s.get("adjustments") or 0
+    if n:
+        out.append(f"Your own changes: {n} on the dial or in the app")
+    fl = (s.get("hot_flashes") or 0) + (s.get("cold_flashes") or 0)
+    if fl:
+        out.append(f"{fl} hot or cold flash{'es' if fl != 1 else ''}")
+    worn = []
+    if s.get("hr_avg"):
+        worn.append("heart rate")
+    if s.get("stages") or s.get("settled_min"):
+        worn.append("sleep stages")
+    if worn:
+        out.append("Your watch or ring: " + " and ".join(worn))
+    if fb.get("temp"):
+        out.append(f"Your check-in: {FEEL_WORDS.get(fb['temp'], fb['temp'])}")
+    return out
+
+
+def review_page(c, p, night, now: float) -> dict:
+    """Sleep → Review for one night: its check-in, its review and what that is based on, tonight's suggestions (for
+    the night that just ended only) and what was applied from it (undoable for a week)."""
+    from .summary import summarize
+    d = night.isoformat()
+    fb = c.store.get(f"feedback:{p.id}:{d}") or {}
+    s = summarize(c.store, p, night, c.clock.tz, now) or {}
+    rv = c.store.get(f"ai_review:{p.id}:{d}") or None
+    started = c.store.get(f"ai_review_started:{p.id}:{d}")
+    last = night == last_night(c, now)
+    applied = []
+    for iid, a in (c.store.get(f"applied_insights:{p.id}", {}) or {}).items():
+        if applied_night(c, a) == d:
+            applied.append({"id": iid, "change": change_text(p, a), "ts": a.get("ts"),
+                            "can_undo": a.get("before") is not None and now - float(a.get("ts") or 0) < UNDO_DAYS * 86400})
+    return {"date": d, "last": last, "has_data": bool(s.get("has_data")), "feel": fb.get("temp"),
+            "review": rv if rv and rv.get("answer") else None,
+            "reviewing": bool(not rv and started and now - float(started) < REVIEW_WAIT_S),
+            "review_on": bool(p.settings.autopilot.ai_review),
+            "basis": basis(s, fb) if s.get("has_data") else [],
+            "suggestions": waiting_suggestions(c, p, now) if last else [],
+            "applied": sorted(applied, key=lambda x: -(x["ts"] or 0))}
