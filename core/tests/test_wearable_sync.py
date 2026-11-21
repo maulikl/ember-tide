@@ -201,13 +201,18 @@ def test_repair_forgets_wrongly_shifted_readings_once(tmp_path):
 
 
 def test_wearables_endpoint_lists_reporting_sources(tmp_path):
+    def listed():
+        # the simulator's own watch sources report at night by the real clock, so leave them out: this is about imports
+        sim = {s.name for s in ctl.sources.configs if s.driver == "sim"} | {s.device for s in ctl.sources.configs if s.driver == "sim"}
+        return [w for w in c.get("/api/people/p1/wearables").json() if w["name"] not in sim]
+
     with make(tmp_path) as c:
         ctl = c.app.state.notifier.c
         now = ctl.clock.now_ts()
-        assert c.get("/api/people/p1/wearables").json() == []
+        assert listed() == []
         post(c, "Samsung Health", "hr", [[now - 3600, 62.0], [now - 1800, 60.0]])
         ctl.store.samples_many([(now - 40 * 3600, "wear:p1:hr:Health Sync", 61.0)])
-        got = {w["name"]: w for w in c.get("/api/people/p1/wearables").json()}
+        got = {w["name"]: w for w in listed()}
         assert set(got) == {"Samsung Health", "Health Sync"}
         assert set(got["Samsung Health"]) == {"name", "kind", "last", "quiet"}
         assert got["Samsung Health"]["quiet"] is False and got["Samsung Health"]["last"] > now - 7200
