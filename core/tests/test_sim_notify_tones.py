@@ -196,7 +196,7 @@ async def test_the_button_confirmations_are_short_plain_and_tone_free(tmp_path, 
 
 
 @pytest.mark.parametrize("kind", sorted(k for k in voice.PHRASES if k not in {"story_pet", "story_pet_with", "story_fitted", "checkin_app", "flash_end",
-                                                                          "manual_cooler", "manual_warmer", "pattern_cooler", "pattern_warmer",
+                                                                          "manual_cooler", "manual_warmer", "pattern_cooler", "pattern_warmer", "checkin_cooler", "checkin_warmer",
                                                                           "assistant_proposed"}))
 def test_every_notification_phrase_fits_a_phone_in_every_tone(kind):
     """All variants of every notification wording, filled with the longest sensible values, still fit the title and body."""

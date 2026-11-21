@@ -222,6 +222,29 @@ PHRASES: dict[str, dict[str, list[Variant]]] = {
                    ("{phase} has been a bit nippy: {n} of the last {look} nights", "Your taps and Autopilot are in cahoots. Make {phase} {step} warmer?"),
                    ("Chilly {phase} again ({n} of the last {look} nights)", "Make {phase} {step} warmer, before you start smuggling in a hot water bottle?")],
     },
+    # a pattern only your morning check-ins show (no taps, flashes or Autopilot records): name the mornings, not "taps"
+    "checkin_cooler": {
+        "calm": [("You said too warm on {n} of the last {look} mornings", "{phase} is your warmest stage, so it's the likeliest one. Make {phase} {step} cooler?"),
+                 ("Too warm on {n} of the last {look} mornings", "That's what you told us. {phase} is your warmest stage: try it {step} cooler?"),
+                 ("{n} of your last {look} check-ins said too warm", "{phase} runs warmest, so start there. Make {phase} {step} cooler?")],
+        "friendly": [("You've woken up warm {n} of the last {look} mornings", "{phase} is your warmest stage. Shall we make it {step} cooler?"),
+                     ("A bit warm lately: {n} of the last {look} mornings", "Want to try {phase}, your warmest stage, {step} cooler?"),
+                     ("Too warm on {n} of the last {look} mornings", "How about {phase} {step} cooler? It's your warmest stage.")],
+        "cheeky": [("Too warm on {n} of the last {look} mornings", "{phase} is the toastiest stage. Make it {step} cooler before the duvet files a complaint?"),
+                   ("{n} of the last {look} mornings: too warm, says you", "Shall we take {phase}, your warmest stage, {step} cooler?"),
+                   ("Warm again: {n} of the last {look} mornings", "{phase} runs hottest. Try it {step} cooler, and the starfish pose can retire?")],
+    },
+    "checkin_warmer": {
+        "calm": [("You said too cold on {n} of the last {look} mornings", "{phase} is your coolest stage, so it's the likeliest one. Make {phase} {step} warmer?"),
+                 ("Too cold on {n} of the last {look} mornings", "That's what you told us. {phase} is your coolest stage: try it {step} warmer?"),
+                 ("{n} of your last {look} check-ins said too cold", "{phase} runs coolest, so start there. Make {phase} {step} warmer?")],
+        "friendly": [("You've woken up cold {n} of the last {look} mornings", "{phase} is your coolest stage. Shall we make it {step} warmer?"),
+                     ("A bit chilly lately: {n} of the last {look} mornings", "Want to try {phase}, your coolest stage, {step} warmer?"),
+                     ("Too cold on {n} of the last {look} mornings", "How about {phase} {step} warmer? It's your coolest stage.")],
+        "cheeky": [("Too cold on {n} of the last {look} mornings", "{phase} is the chilliest stage. Make it {step} warmer before the bed socks come out?"),
+                   ("{n} of the last {look} mornings: too cold, says you", "Shall we take {phase}, your coolest stage, {step} warmer?"),
+                   ("Chilly again: {n} of the last {look} mornings", "{phase} runs coolest. Try it {step} warmer, and retire the hot water bottle?")],
+    },
     # ---------- alerts: plain in every tone ----------
     "problem_offline": {
         "calm": [("Can't reach the bed", "No word from the bed for 5 minutes ({detail}). It keeps its last temperature."),

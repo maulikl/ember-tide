@@ -919,6 +919,28 @@ def _suggest(c, p) -> list[dict]:
                 nd = night_date(datetime.fromtimestamp(x["ts"], c.clock.tz)).isoformat()
                 by_phase[ph][d] += 1
                 nights[(ph, d)].add(nd)
+    # The morning check-in is your own word too, about the whole night. 2026-11-21: two "Too cold" mornings in a row
+    # counted for nothing, because only taps, flashes and Autopilot's records were evidence. It counts like a tap, on
+    # that night's coolest step (too cold) or warmest step (too warm) among the steps they were in bed for (wind-down
+    # is often the coolest and runs before bed): the step most likely to have felt that way. A tie goes to the step
+    # they spent longest in.
+    before = {k for k, v in nights.items() if v}
+    oldest = (datetime.fromtimestamp(now, c.clock.tz) - timedelta(days=look)).date()
+    for nd in sorted({x.get("night") for x in evs if x["kind"] == "feedback" and x.get("night")}):
+        temp = (c.store.get(f"feedback:{p.id}:{nd}") or {}).get("temp")      # the latest answer, if they changed it
+        night = date.fromisoformat(nd)
+        night_rh = pick_rhythm(p.rhythms, night) if temp in ("cold", "warm") and night >= oldest else None
+        if not night_rh or not night_rh.phases:
+            continue
+        d = "warmer" if temp == "cold" else "cooler"
+        win = night_window(p, night, c.clock.tz, now)
+        in_bed = Counter(r["phase"] for r in (c.store.history(p.zone, *win, step_s=60, person=p.id) if win else [])
+                         if r.get("occupied") and r.get("phase"))
+        cands = [q for q in night_rh.phases if in_bed.get(q.id, 0) >= 10] or night_rh.phases    # 10+ min in bed
+        ph = (min(cands, key=lambda q: (q.temp_c, -in_bed.get(q.id, 0))) if temp == "cold"
+              else max(cands, key=lambda q: (q.temp_c, in_bed.get(q.id, 0)))).id
+        by_phase[ph][d] += 2
+        nights[(ph, d)].add(nd)
     rh = pick_rhythm(p.rhythms, night_date(datetime.fromtimestamp(now, c.clock.tz)))
     out = _manual_changes(c, p, evs) if p.settings.autopilot.suggest_manual else []
     for ph, cnt in by_phase.items():
@@ -935,7 +957,8 @@ def _suggest(c, p) -> list[dict]:
         if abs(to - phase.temp_c) < 0.05:
             continue
         out.append({"id": f"ap-{ph}-{d}-{max(nights[(ph, d)])}", "kind": "pattern", "phase": ph, "phase_name": phase.name, "direction": d, "nights": sorted(nights[(ph, d)]),
-                    **voice.suggestion_words("pattern", d, {"phase": phase.name, "n": n_nights, "look": look - 1, "step": "1 °F" if p.settings.units == "F" else "0.5 °C"}, p,
+                    # only your mornings say so (no taps, flashes or Autopilot records): say that, not "your taps agree"
+                    **voice.suggestion_words("pattern" if (ph, d) in before else "checkin", d, {"phase": phase.name, "n": n_nights, "look": look - 1, "step": "1 °F" if p.settings.units == "F" else "0.5 °C"}, p,
                                              datetime.fromtimestamp(now, c.clock.tz).date(), len(out)),
                     "proposal": {"rhythm_id": rh.id, "phase_id": ph, "field": "temp_c", "from": phase.temp_c, "to": to}})
     return out
