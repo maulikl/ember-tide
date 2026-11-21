@@ -273,4 +273,57 @@ class WatchLogicTest {
         assertEquals(0xFFEE8A55, WatchLogic.colorArgb("orange"))
         assertNotNull(WatchLogic.colorArgb("nonsense"))
     }
+
+    // ---------- in-app updates ----------
+    private val validUrl = "https://github.com/Ncbudd/ember-tide/releases/download/v0.1.18/embertide-wear.apk"
+    private val validSha = "0123456789abcdef0123456789ABCDEF0123456789abcdef0123456789abcdef"
+
+    @Test fun validWearEntryChecksUrlShaAndSize() {
+        assertTrue(WatchLogic.validWearEntry(validUrl, validSha, 12_345_678L))
+        assertTrue(WatchLogic.validWearEntry(validUrl.uppercase(), validSha, 1L))
+        assertFalse(WatchLogic.validWearEntry("http://github.com/Ncbudd/ember-tide/releases/download/v0.1.18/app.apk", validSha, 1000L))
+        assertFalse(WatchLogic.validWearEntry("https://github.com/other/repo/releases/download/v0.1.18/app.apk", validSha, 1000L))
+        assertFalse(WatchLogic.validWearEntry("$validUrl ", validSha, 1000L))
+        assertFalse(WatchLogic.validWearEntry("https://github.com/Ncbudd/ember-tide/releases/download/v0.1.18/app\n.apk", validSha, 1000L))
+        assertFalse(WatchLogic.validWearEntry(validUrl + "a".repeat(500), validSha, 1000L))
+        assertFalse(WatchLogic.validWearEntry(validUrl, "short", 1000L))
+        assertFalse(WatchLogic.validWearEntry(validUrl, "g".repeat(64), 1000L))
+        assertFalse(WatchLogic.validWearEntry(validUrl, validSha, 0L))
+        assertFalse(WatchLogic.validWearEntry(validUrl, validSha, -1L))
+        assertFalse(WatchLogic.validWearEntry(validUrl, validSha, 200L * 1024L * 1024L))
+    }
+
+    @Test fun offerParsesNewerWearEntryAndRejectsOlderOrMissing() {
+        val updateJson = """
+            {"current":"0.1.17","enabled":true,"latest":"0.1.18","version_code":18,"available":true,
+             "error":null,"android":{"wear":{"url":"$validUrl","sha256":"$validSha","size":12345678}}}
+        """.trimIndent()
+        val offer = WatchLogic.offer(updateJson, 17L)
+        assertNotNull(offer)
+        assertEquals("0.1.18", offer!!.version)
+        assertEquals(18L, offer.versionCode)
+        assertEquals(validUrl, offer.url)
+        assertEquals(validSha, offer.sha256)
+        assertEquals(12_345_678L, offer.size)
+
+        assertNull(WatchLogic.offer(updateJson, 18L))
+        assertNull(WatchLogic.offer(updateJson, 19L))
+
+        val noWear = """{"current":"0.1.17","enabled":true,"latest":"0.1.18","version_code":18,"android":{}}"""
+        assertNull(WatchLogic.offer(noWear, 17L))
+        assertNull(WatchLogic.offer("""{"latest":"0.1.18","version_code":18}""", 17L))
+        assertNull(WatchLogic.offer("not json", 17L))
+        assertNull(WatchLogic.offer("", 17L))
+    }
+
+    @Test fun isUpToDateRequiresSuccessfulCheckWithNoNewerVersion() {
+        val same = """{"current":"0.1.18","enabled":true,"latest":"0.1.18","version_code":18,"error":null}"""
+        assertTrue(WatchLogic.isUpToDate(same, 18L))
+        assertTrue(WatchLogic.isUpToDate(same, 19L))
+        assertFalse(WatchLogic.isUpToDate(same, 17L))
+        assertFalse(WatchLogic.isUpToDate("""{"enabled":false,"version_code":18,"error":null}""", 18L))
+        assertFalse(WatchLogic.isUpToDate("""{"enabled":true,"version_code":18,"error":"boom"}""", 18L))
+        assertFalse(WatchLogic.isUpToDate("""{"enabled":true,"version_code":null}""", 18L))
+        assertFalse(WatchLogic.isUpToDate("garbage", 18L))
+    }
 }

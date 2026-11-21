@@ -400,3 +400,15 @@ def test_per_address_limit_follows_the_real_visitor_not_a_spoofed_xff(tmp_path):
             codes.append(c.post("/api/auth/login", json={"username": f"user{i}", "password": "wrong password 1"},
                                 headers={"CF-Connecting-IP": OUT, "X-Forwarded-For": f"203.0.113.{i}, {OUT}"}).status_code)
         assert codes[-1] == 429
+
+
+def test_watch_key_can_read_the_update_check_but_not_change_it(home):
+    """The watch offers its own update, so its key may read /api/update; turning checks off or checking now stay with the app."""
+    c, s = home
+    bare = TestClient(c.app)
+    for who in ("sam", "vic"):
+        k, _ = mint(c, s[who], "watch")
+        r = bare.get("/api/update", headers=k)
+        assert r.status_code == 200 and "current" in r.json(), (who, r.status_code)
+        assert bare.put("/api/update/settings", json={"enabled": False}, headers=k).status_code == 403
+        assert bare.post("/api/update/check", headers=k).status_code == 403

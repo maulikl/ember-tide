@@ -345,6 +345,7 @@ private fun SettingsPage(m: BedModel, hrTick: Int, onHr: () -> Unit) {
     }
     val version = remember { runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull() ?: "" }
     val host = remember(m.snap) { runCatching { android.net.Uri.parse(WearApi.server(ctx)).host }.getOrNull().orEmpty() }
+    LaunchedEffect(Unit) { m.checkUpdate() }
     ScreenScaffold(scrollState = list) { pad ->
         ScalingLazyColumn(state = list, contentPadding = pad, modifier = Modifier.fillMaxSize()) {
             item { Text("Settings", color = MUTE, fontSize = 12.sp, textAlign = TextAlign.Center) }
@@ -377,7 +378,30 @@ private fun SettingsPage(m: BedModel, hrTick: Int, onHr: () -> Unit) {
             if (m.snap == null && m.problem != Problem.Unreachable) item {
                 Text("Sign in on your phone. Open Ember & Tide there and this watch follows.", color = MUTE, fontSize = 11.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 14.dp))
             }
-            item { Text(if (version.isNotEmpty()) "Version $version" else "Ember & Tide", color = MUTE, fontSize = 11.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(bottom = 18.dp)) }
+            val offer = m.update
+            if (offer != null) {
+                item {
+                    val pct = m.updateBusy
+                    Wide(
+                        label = if (pct != null) "Downloading $pct%" else "Update to ${offer.version}",
+                        enabled = pct == null,
+                    ) { m.startUpdate() }
+                }
+            }
+            val msg = m.updateMsg
+            if (!msg.isNullOrEmpty()) {
+                item {
+                    Text(msg, color = MUTE, fontSize = 11.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 14.dp))
+                }
+            }
+            item {
+                val versionText = when {
+                    version.isEmpty() -> "Ember & Tide"
+                    m.updateUpToDate && offer == null -> "Version $version · up to date"
+                    else -> "Version $version"
+                }
+                Text(versionText, color = MUTE, fontSize = 11.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(bottom = 18.dp))
+            }
         }
     }
 }

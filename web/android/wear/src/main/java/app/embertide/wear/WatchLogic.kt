@@ -26,14 +26,27 @@ data class Side(
 
 data class Snap(val nowS: Double, val tz: String, val minC: Double, val maxC: Double, val me: Side, val partner: Side?)
 
+data class Offer(val version: String, val versionCode: Long, val url: String, val sha256: String, val size: Long)
+
 object WatchLogic {
     const val DEFAULT_MIN_C = 12.0
     const val DEFAULT_MAX_C = 35.0
     const val FALLBACK_START_C = 21.1
+    private const val ALLOWED_UPDATE_URL_PREFIX = "https://github.com/Ncbudd/ember-tide/releases/download/"
+    private const val MAX_APK_BYTES = 200L * 1024L * 1024L
+    private val SHA256_RE = Regex("^[0-9a-fA-F]{64}$")
 
     // ---------- reading the snapshot ----------
     private fun JSONObject.dbl(k: String): Double? = if (isNull(k) || !has(k)) null else optDouble(k).takeIf { !it.isNaN() }
     private fun JSONObject.str(k: String): String? = if (isNull(k) || !has(k)) null else optString(k).takeIf { it.isNotEmpty() }
+    private fun JSONObject.lng(k: String): Long? {
+        if (!has(k) || isNull(k)) return null
+        return when (val v = opt(k)) {
+            is Int -> v.toLong()
+            is Long -> v
+            else -> null
+        }
+    }
 
     fun side(p: JSONObject): Side {
         val n = p.getJSONObject("night")
@@ -300,4 +313,38 @@ object WatchLogic {
         "gold" -> 0xFFE0B45C
         else -> 0xFF5FB8B0
     }
+
+    // ---------- in-app updates ----------
+    fun validWearEntry(url: String?, sha256: String?, size: Long): Boolean {
+        if (url == null || url.length > 500
+            || !url.lowercase(Locale.US).startsWith(ALLOWED_UPDATE_URL_PREFIX.lowercase(Locale.US))) {
+            return false
+        }
+        for (ch in url) {
+            if (ch.isWhitespace() || ch.code < 32) return false
+        }
+        if (sha256 == null || !SHA256_RE.matches(sha256)) return false
+        return size > 0 && size < MAX_APK_BYTES
+    }
+
+    fun offer(json: String, installedVersionCode: Long): Offer? = runCatching {
+        val root = JSONObject(json)
+        val versionCode = root.lng("version_code") ?: return@runCatching null
+        if (versionCode <= installedVersionCode) return@runCatching null
+        val version = root.str("latest") ?: return@runCatching null
+        val wear = root.optJSONObject("android")?.optJSONObject("wear") ?: return@runCatching null
+        val url = wear.str("url")
+        val sha256 = wear.str("sha256")
+        val size = wear.lng("size") ?: -1L
+        if (!validWearEntry(url, sha256, size)) return@runCatching null
+        Offer(version, versionCode, url!!, sha256!!, size)
+    }.getOrNull()
+
+    fun isUpToDate(json: String, installedVersionCode: Long): Boolean = runCatching {
+        val root = JSONObject(json)
+        if (!root.optBoolean("enabled", true)) return@runCatching false
+        if (root.str("error") != null) return@runCatching false
+        val versionCode = root.lng("version_code") ?: return@runCatching false
+        versionCode <= installedVersionCode
+    }.getOrDefault(false)
 }

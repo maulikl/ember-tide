@@ -38,27 +38,90 @@ class BedModel(app: Application) : AndroidViewModel(app) {
     var toast by mutableStateOf<Pair<String, Boolean>?>(null); private set
     var pending by mutableIntStateOf(0); private set          // temperature steps tapped or turned, not sent yet
     var preset by mutableIntStateOf(0); private set           // while the side is off: -/+ steps for what "Turn on now" starts at (nothing is sent)
+    var update by mutableStateOf<Offer?>(null); private set
+    var updateBusy by mutableStateOf<Int?>(null); private set
+    var updateMsg by mutableStateOf<String?>(null); private set
+    var updateUpToDate by mutableStateOf(false); private set
 
     private var nudgeJob: Job? = null
     private var sending = false
     private var toastJob: Job? = null
+    private var updateCheckedAtMs: Long? = null
+    private var checkingUpdate = false
+    private var updateRunId = 0
 
     fun refresh() {
         viewModelScope.launch { lock.withLock { fetch() } }
     }
 
     private suspend fun fetch() = withContext(Dispatchers.IO) {
+        WatchUpdate.consumeLastError(c)?.let { updateMsg = it }
         if (!WearApi.ready(c)) { snap = null; problem = Problem.NotSignedIn; loading = false; return@withContext }
         try {
             val s = WatchLogic.snap(JSONObject(WearApi.call(c, "GET", "/api/snapshot")), WearApi.person(c))
             if (s == null) { snap = null; problem = Problem.NoSide }
-            else { snap = s; fetchedAt = SystemClock.elapsedRealtime(); problem = null; if (!WatchLogic.canPreset(s.me)) preset = 0 }
+            else {
+                snap = s; fetchedAt = SystemClock.elapsedRealtime(); problem = null
+                if (!WatchLogic.canPreset(s.me)) preset = 0
+                withContext(Dispatchers.Main) { checkUpdate() }
+            }
         } catch (e: Exception) {
             // 401: the watch key was revoked or the phone signed out; opening the app on the phone hands over a new one
             if (e.message?.startsWith("HTTP 401") == true) { snap = null; problem = Problem.SignedOut }
             else problem = Problem.Unreachable
         }
         loading = false
+    }
+
+    // ---------- in-app updates (at most once every 6 hours) ----------
+    fun checkUpdate() {
+        if (checkingUpdate || !WearApi.ready(c)) return
+        val now = SystemClock.elapsedRealtime()
+        val last = updateCheckedAtMs
+        if (last != null && now - last < UPDATE_EVERY_MS) return
+        checkingUpdate = true
+        viewModelScope.launch {
+            try {
+                val (res, err) = withContext(Dispatchers.IO) {
+                    WatchUpdate.checkStatus(c) to WatchUpdate.consumeLastError(c)
+                }
+                if (err != null) updateMsg = err
+                updateCheckedAtMs = SystemClock.elapsedRealtime()
+                when (res) {
+                    is WatchUpdate.CheckResult.Available -> { update = res.offer; updateUpToDate = false }
+                    is WatchUpdate.CheckResult.UpToDate -> { update = null; updateUpToDate = true }
+                    is WatchUpdate.CheckResult.Unavailable -> { update = null; updateUpToDate = false }
+                }
+            } finally {
+                checkingUpdate = false
+            }
+        }
+    }
+
+    fun startUpdate() {
+        val offer = update ?: return
+        if (updateBusy != null) return
+        val runId = ++updateRunId
+        updateMsg = null
+        updateBusy = 0
+        viewModelScope.launch {
+            val res = withContext(Dispatchers.IO) {
+                WatchUpdate.install(c, offer) { pct ->
+                    viewModelScope.launch {
+                        if (updateRunId == runId && updateBusy != null) updateBusy = pct
+                    }
+                }
+            }
+            updateBusy = null
+            updateRunId++
+            if (res is WatchUpdate.InstallResult.Failed) {
+                updateMsg = res.message
+            }
+        }
+    }
+
+    companion object {
+        private const val UPDATE_EVERY_MS = 6L * 3600_000L
     }
 
     private fun say(text: String, ok: Boolean) {
