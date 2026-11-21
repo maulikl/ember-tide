@@ -601,6 +601,8 @@ def build_router(app_state) -> APIRouter:
         merged = {**prev, **{k: v for k, v in {"temp": b.temp, "note": b.note, "rested": b.rested}.items() if v is not None}, "ts": c.clock.now_ts()}
         c.store.put(f"feedback:{pid}:{b.date}", merged)
         c.store.event(c.clock.now_ts(), "feedback", pid, "app", night=b.date, temp=b.temp, note=b.note, rested=b.rested)
+        from .notify import checkin_saved
+        checkin_saved(c, pid, b.date)
         return {"ok": True}
 
     @r.get("/people/{pid}/morning")

@@ -1025,5 +1025,10 @@ async def _review(state, p, d: str | None, question: str | None) -> dict:
         if proposal and proposal["rhythm_id"] != ctx["rhythm_id"]:
             proposal = None
         out = {"answer": answer, "proposal": proposal, "model": ai.model_name(eff), "ts": now, "date": dd.isoformat()}
+    # what the review knew of the morning check-in, so a later or changed check-in can have it rewritten
+    from .notify import checkin_of
+    out["checkin"] = checkin_of(ctx["morning_checkin"])
+    if question:
+        out["asked"] = True
     c.store.put(f"ai_review:{p.id}:{dd.isoformat()}", out)
     return out

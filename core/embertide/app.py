@@ -190,16 +190,47 @@ def create_app(cfg: Config | None = None) -> FastAPI:
         saved_ha = store.get("ha_bridge", {}) or {}
         import asyncio as _asyncio
 
-        def _review_hook(person, d):
+        reviewing: set[tuple[str, str]] = set()
+
+        async def _fresh_review(person, d):
+            """Write the night's review, and write it again (up to twice) if a check-in arrived or changed meanwhile."""
             from .autopilot_api import _review
+            from .notify import review_stale
+            out = await _review(state, person, d, None)
+            for _ in range(2):
+                if not review_stale(state.controller, person.id, d):
+                    break
+                out = await _review(state, person, d, None)
+            return out
+
+        def _review_hook(person, d):
             async def run():
+                reviewing.add((person.id, d))
                 try:
-                    out = await _review(state, person, d, None)
+                    out = await _fresh_review(person, d)
                     state.notifier.send_review(person, d, out)
                 except Exception:  # noqa: BLE001
                     log.warning("morning AI review for %s failed", person.id)
+                finally:
+                    reviewing.discard((person.id, d))
+            _asyncio.get_running_loop().create_task(run())
+
+        def _refresh_hook(pid, d):
+            # a check-in came after the review: rewrite it quietly (the page and Tonight's card show the new one; no
+            # second notification). One at a time per night; the running one picks up any newer answer.
+            if (pid, d) in reviewing:
+                return
+            async def run():
+                reviewing.add((pid, d))
+                try:
+                    await _fresh_review(state.controller.person(pid), d)
+                except Exception:  # noqa: BLE001
+                    log.warning("rewriting the AI review for %s after the check-in failed", pid)
+                finally:
+                    reviewing.discard((pid, d))
             _asyncio.get_running_loop().create_task(run())
         state.controller.review_hook = _review_hook
+        state.controller.review_refresh_hook = _refresh_hook
         from .cloud import CloudAccounts             # cloud accounts (Oura, Withings, WHOOP, Polar) + webhooks / JSON polls
         state.cloud = CloudAccounts(state.controller)
         app.state.cloud = state.cloud
