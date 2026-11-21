@@ -129,7 +129,32 @@ def save_feel(c, pid: str, temp: str, now: float, source: str = "app", night: st
     prev = c.store.get(f"feedback:{pid}:{d}", {}) or {}
     c.store.put(f"feedback:{pid}:{d}", {**prev, "temp": temp, "ts": now})
     c.store.event(now, "feedback", pid, source, night=d, temp=temp)
+    checkin_saved(c, pid, d)
     return d
+
+
+def checkin_of(fb: dict | None) -> dict:
+    """The parts of a morning check-in a review reads (how it felt and what they wrote)."""
+    fb = fb or {}
+    return {"temp": fb.get("temp"), "note": fb.get("note")}
+
+
+def review_stale(c, pid: str, night: str) -> bool:
+    """The night's AI review was written before the morning check-in (or before it changed), so it may say the opposite
+    of what the person told us. 2026-11-21: the review went out two minutes before "Too cold" and called the night
+    "just right". Only a model's morning review: not the built-in summary, not an answer to a question someone asked."""
+    rv = c.store.get(f"ai_review:{pid}:{night}") or {}
+    fb = checkin_of(c.store.get(f"feedback:{pid}:{night}"))
+    if not rv.get("model") or rv.get("asked") or not fb["temp"]:
+        return False
+    return checkin_of(rv.get("checkin")) != fb
+
+
+def checkin_saved(c, pid: str, night: str) -> None:
+    """A morning check-in was saved: rewrite that night's review in the background if it no longer fits."""
+    hook = getattr(c, "review_refresh_hook", None)
+    if hook and review_stale(c, pid, night):
+        hook(pid, night)
 
 
 @dataclass

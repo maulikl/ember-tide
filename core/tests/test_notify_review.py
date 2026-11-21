@@ -183,3 +183,72 @@ def test_dismiss_card_endpoint(tmp_path):
         assert tc.post("/api/people/p1/morning/dismiss", json={"id": "sugg-2026-11-05"}, headers=H).json() == {"ok": True, "night": "2026-11-05"}
         assert tc.post("/api/people/p1/morning/dismiss", json={"id": "../x"}, headers=H).status_code == 422
         assert tc.app.state.oura.c.store.get("morning_dismissed:p1").keys() == {"sugg-2026-11-05"}
+
+
+def test_a_check_in_after_the_review_has_it_rewritten(tmp_path, monkeypatch):
+    # 2026-11-21: the morning review went out at 11:12 calling the night "just right"; "Too cold" came at 11:14 and the
+    # review never changed
+    import json
+    import time
+
+    import httpx
+
+    from test_autopilot_suite import make as make_app
+    sent, replies = [], ["Comfortable night.", "You said it was too cold: warm the late phase a little.", "Third."]
+
+    async def fake_post(self, url, json=None, headers=None, **kw):
+        sent.append(json)
+        return httpx.Response(200, json={"choices": [{"message": {"content": replies[min(len(sent), len(replies)) - 1]}}]},
+                              request=httpx.Request("POST", url))
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+
+    def review(c):
+        return c.get("/api/people/p1/autopilot/ai-review", params={"date": "2026-11-05"}).json()
+
+    def wait_for(pred):
+        for _ in range(100):
+            if pred():
+                return True
+            time.sleep(0.02)
+        return False
+
+    with make_app(tmp_path, llm="http://fake/v1") as c:
+        c.post("/api/sim", json={"jump_to": "2026-11-06T09:00"}, headers=H)
+        first = c.post("/api/people/p1/autopilot/ai-review", json={"date": "2026-11-05"}, headers=H).json()
+        assert first["answer"] == "Comfortable night." and first["checkin"] == {"temp": None, "note": None}
+        c.post("/api/people/p1/feedback", json={"date": "2026-11-05", "temp": "cold"}, headers=H)
+        assert wait_for(lambda: review(c)["answer"].startswith("You said it was too cold"))
+        ctx = json.loads(sent[-1]["messages"][-1]["content"].split("```json\n", 1)[1].split("\n```", 1)[0])
+        assert ctx["morning_checkin"]["temp"] == "cold" and ctx["evidence_tonight"] is True
+        assert review(c)["checkin"]["temp"] == "cold"
+        calls = len(sent)
+        c.post("/api/people/p1/feedback", json={"date": "2026-11-05", "temp": "cold", "rested": 4}, headers=H)
+        time.sleep(0.2)
+        assert len(sent) == calls                                         # same answer: nothing to rewrite
+        # an answer to a question someone asked is theirs: a check-in doesn't replace it
+        c.post("/api/people/p1/autopilot/ai-review", json={"date": "2026-11-05", "question": "Was the start too warm?"}, headers=H)
+        calls = len(sent)
+        c.post("/api/people/p1/feedback", json={"date": "2026-11-05", "temp": "right"}, headers=H)
+        time.sleep(0.2)
+        assert len(sent) == calls
+
+
+async def test_review_stale_only_for_a_model_review_that_missed_the_check_in(tmp_path):
+    from embertide.notify import review_stale, save_feel
+    n = await morning(tmp_path)
+    calls = []
+    n.c.review_refresh_hook = lambda pid, d: calls.append((pid, d))
+    st = n.c.store
+    assert not review_stale(n.c, "p1", "2026-11-05")                      # no review yet
+    st.put("ai_review:p1:2026-11-05", {**out(), "checkin": {"temp": None, "note": None}})
+    assert not review_stale(n.c, "p1", "2026-11-05")                      # no check-in yet
+    save_feel(n.c, "p1", "cold", n.c.clock.now_ts(), night="2026-11-05")
+    assert review_stale(n.c, "p1", "2026-11-05") and calls == [("p1", "2026-11-05")]
+    st.put("ai_review:p1:2026-11-05", {**out(), "checkin": {"temp": "cold", "note": None}})
+    assert not review_stale(n.c, "p1", "2026-11-05")
+    st.put("ai_review:p1:2026-11-05", out(model=None))                   # the built-in summary: nothing to rewrite
+    assert not review_stale(n.c, "p1", "2026-11-05")
+    st.put("ai_review:p1:2026-11-05", {**out(), "asked": True})
+    assert not review_stale(n.c, "p1", "2026-11-05")
+    st.put("ai_review:p1:2026-11-05", out())                              # written before this change: treated as stale
+    assert review_stale(n.c, "p1", "2026-11-05")

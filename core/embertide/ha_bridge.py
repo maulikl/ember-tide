@@ -397,6 +397,8 @@ class HaBridge:
                     fb = self.c.store.get(f"feedback:{p.id}:{night}", {}) or {}
                     self.c.store.put(f"feedback:{p.id}:{night}", {**fb, "temp": temp, "ts": now})
                     self.c.store.event(now, "feedback", p.id, "ha", night=night, temp=temp)
+                    from .notify import checkin_saved
+                    checkin_saved(self.c, p.id, night)
                     done = f"morning check-in: {temp}"
                 else:
                     self.c.store.event(now, "feel", p.id, "ha", feel=payload, phase=e.s.phase_id, target_c=e.s.target_c,
