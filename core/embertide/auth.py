@@ -562,7 +562,7 @@ DEVICE_SCOPES: dict[str, frozenset] = {
     "watch": _WATCH_OWN,
     "phone": _WATCH_OWN | {("POST", "/feedback"), ("POST", "/away-check")},
 }
-DEVICE_READS = frozenset({("GET", "/api/snapshot")})
+DEVICE_READS = frozenset({("GET", "/api/snapshot"), ("GET", "/api/update")})   # the update check: the watch offers its own update
 DEVICE_PET_ANSWER = re.compile(r"^/pet-question/[A-Za-z0-9]{1,40}$")      # phone: "was that the pet?" from a notification
 
 
