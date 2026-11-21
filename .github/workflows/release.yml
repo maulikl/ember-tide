@@ -160,10 +160,24 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          set -e
+          set -eo pipefail
           tasks="testMinimalDebugUnitTest assembleMinimalRelease :wear:assembleRelease"
           if [ "$HAVE_GOOGLE_SERVICES" = "1" ]; then tasks="testFullDebugUnitTest assembleFullRelease $tasks"; fi
-          ./gradlew $tasks --no-daemon --stacktrace
+          log="$RUNNER_TEMP/gradle.log"
+          # Maven Central sometimes refuses or loses downloads (429 Too Many Requests, 5xx, timeouts, a library briefly
+          # "not found"). Gradle retries each download itself (more patiently with the settings below); if the build still
+          # fails on downloads, run it again after a pause. Any other failure (a test, a compile error) fails at once.
+          for attempt in 1 2 3; do
+            # shellcheck disable=SC2086
+            if ./gradlew $tasks --no-daemon --stacktrace                 -Dorg.gradle.internal.repository.max.retries=5                 -Dorg.gradle.internal.repository.initial.backoff=2000 2>&1 | tee "$log"; then
+              break
+            fi
+            if [ "$attempt" = 3 ] || ! grep -qE "Received status code (429|5[0-9][0-9])|Could not (GET|HEAD) '|Could not (resolve|find) [a-z0-9._-]+:[a-zA-Z0-9._-]+:|(Read|Connect|connect) timed out|Connection reset|Remote host terminated" "$log"; then
+              exit 1
+            fi
+            echo "::warning::Downloading Gradle libraries failed (attempt $attempt of 3), trying again in $((attempt * 60)) s."
+            sleep $((attempt * 60))
+          done
       - name: Name the files
         run: |
           set -e
