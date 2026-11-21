@@ -5,6 +5,17 @@ minor versions, and each entry says what to check when upgrading.
 
 ## Unreleased
 
+## 0.1.19
+
+The review listens to your morning check-in, and check-ins now count toward suggestions. Update the server; the apps
+need no changes for this one (the watch can update itself from its Settings page).
+
+- **The night's review follows your check-in.** If you check in after the review was written, or change your answer,
+  the review is rewritten with it. There's no second notification; Sleep, Review and Tonight's card show the new text.
+- **Morning check-ins count toward suggestions.** Saying "Too cold" or "Too warm" on 3 of the last 7 mornings suggests
+  warming the coolest step (or cooling the warmest) among the ones you were in bed for, worded as your mornings.
+- Maintenance: the release build retries when the Android package servers refuse downloads.
+
 ## 0.1.18
 
 The watch can now update itself, and the morning check-in tidies up after itself. Update the server and both apps; the
