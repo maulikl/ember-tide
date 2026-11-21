@@ -5,6 +5,19 @@ minor versions, and each entry says what to check when upgrading.
 
 ## Unreleased
 
+## 0.1.18
+
+The watch can now update itself, and the morning check-in tidies up after itself. Update the server and both apps; the
+watch app needs this one installed the usual way, and updates itself from then on.
+
+- **The watch app updates itself.** When a new version is out, the watch's Settings page shows "Update to …". It
+  downloads the watch app from the release, checks it is the real, newer Ember & Tide, and the watch asks you to confirm.
+  The first time, allow Ember & Tide to install apps when the watch asks.
+- **Choosing how the night felt puts the "Last night" card away,** whether you answer on Tonight or from the morning
+  notification. You can still change it under Sleep, Review.
+- Maintenance: dependency updates (Capacitor, Vite, Firebase, Gradle). A new Python for the Docker image is now a
+  deliberate change rather than an automatic update.
+
 ## 0.1.17
 
 Clearer mornings: the morning notification, Tonight and Sleep now work together. Update the server and the phone app
