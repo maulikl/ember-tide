@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import statistics
 import threading
 from collections import Counter, defaultdict
@@ -19,7 +20,7 @@ from .engine.summary import night_window, summarize
 from .engine.wearables import night_devices
 from . import voice
 from .models import AutopilotPolicy, clamp_phase_temp
-from .units import clock_style, fmt_gap, fmt_temp, language_line, season_words
+from .units import clock_style, fmt_clock, fmt_delta, fmt_gap, fmt_temp, language_line, season_words
 
 
 class FeelBody(BaseModel):
@@ -68,13 +69,13 @@ class ReviewBody(BaseModel):
 
 
 REVIEW_SYSTEM = """You review one night for the Autopilot of Ember & Tide, a dual-zone water-cooled mattress topper.
-You get JSON: the person's rhythm (°C), the night's sensor summary (estimates, not medical), what Autopilot noticed
+You get JSON: the person's rhythm, the night's sensor summary (estimates, not medical), what Autopilot noticed
 (signals: restlessness, heart rate rise, skin temperature change, the bed vs plan) and what it did or would have done,
 the person's own "too hot / too cold" taps, their morning check-in and anything they wrote about how they feel.
 Interpret their own words carefully; they matter most. Assume nothing about where the person lives, their culture,
 work week or holidays: only what the context says. Temperatures in the context are already written in the person's own
-unit (person.units); use that unit and never convert or mention the other one. Dates are ISO and times are 24-hour;
-write times the way person.clock says ("12" = 1:30 PM, "24" = 13:30).
+unit (person.units); use that unit and never convert or mention the other one. Dates are ISO and times are already
+written the way person.clock says; keep them as written.
 How to read the numbers (get these right):
 - "planned_settings" are the temperatures the person CHOSE for each phase. The bed follows them on purpose: a rise or
   fall from one phase to the next is the plan doing its job (e.g. warming toward wake), never the bed "overheating" or
@@ -693,15 +694,87 @@ def _stage_words(st: dict) -> dict | str:
     return "no stage data"
 
 
-def _signal_words(c, p, start: float, end: float) -> dict:
+_C_RE = re.compile(
+    r"(±)\s*(\d+(?:\.\d+)?)\s*°C"
+    r"|(?<![\d.])([+-])(\d+(?:\.\d+)?)\s*°C"
+    r"|(\d+(?:\.\d+)?)\s*°C(?:\s*\(([+-]\d+(?:\.\d+)?)\))?"
+)
+
+
+def _c_words(text: str, units: str = "C") -> str:
+    """Rewrite stored °C strings in Autopilot reasons and blocks into the person's unit."""
+    def repl(m: re.Match) -> str:
+        if m.group(1):
+            return "±" + fmt_gap(float(m.group(2)), units)
+        if m.group(3):
+            return fmt_delta(float(m.group(3) + m.group(4)), units)
+        out = fmt_temp(float(m.group(5)), units)
+        if m.group(6) is not None:
+            out += f" ({fmt_delta(float(m.group(6)), units)} vs usual)"
+        return out
+    return _C_RE.sub(repl, text)
+
+
+def _clip_note(note: str | None, limit: int = 300) -> str | None:
+    """Cut a note to `limit` characters (ending with '…') so the review prompt stays compact."""
+    if not isinstance(note, str) or len(note) <= limit:
+        return note
+    return note[: limit - 1] + "…"
+
+
+def _review_hm(t: float, settings, tz) -> str:
+    """Format a timestamp in the person's chosen 12/24-hour clock."""
+    return fmt_clock(t, clock_style(settings), tz)
+
+
+def _phase_name(phase_id: str | None, phases: dict[str, str]) -> str | None:
+    return phases.get(phase_id, phase_id) if phase_id is not None else None
+
+
+def _review_events(evs: list[dict], rh, units: str, hm) -> tuple[list[str], list[str], list[str], list[dict]]:
+    """Build autopilot_noticed, their_taps and flashes oldest-first with phase names and the person's units."""
+    ordered = sorted(evs, key=lambda x: x["ts"])
+    phases = {ph.id: ph.name for ph in (rh.phases if rh else [])}
+
+    def short_reason(x: dict) -> str:
+        return _c_words(", ".join(f"{r['signal']} {r['value']}" for r in (x.get("reasons") or [])), units)
+
+    noticed = [
+        f"{hm(x['ts'])} {_phase_name(x.get('phase'), phases)}: {x.get('status')} {x.get('direction')} ({short_reason(x)})"
+        + (f" held back: {_c_words(x['blocked_by'][0], units)}" if x.get("blocked_by") else "")
+        for x in ordered if x["kind"] == "autopilot"
+    ][:12]
+    tap_evs = [x for x in ordered if x["kind"] == "feel"][:12]
+    taps = [
+        f"{hm(x['ts'])} {_phase_name(x.get('phase'), phases)}: {x.get('feel')}"
+        + (f' "{_clip_note(x["note"])}"' if x.get("note") else "")
+        for x in tap_evs
+    ]
+    flashes = [f"{hm(x['ts'])} {x['kind']}" for x in ordered if x["kind"] in ("hot_flash", "cold_flash")][:8]
+    return noticed, taps, flashes, tap_evs
+
+
+def _has_evidence(noticed: list, tap_evs: list[dict], checkin: dict | None, flashes: list, changes: list) -> bool:
+    """True when there is any sign of discomfort or intervention worth reviewing."""
+    checkin_ev = checkin is not None and (checkin.get("temp") in ("cold", "warm") or bool(checkin.get("note")))
+    tap_ev = any(x.get("feel") != "just_right" for x in tap_evs)
+    return bool(noticed or tap_ev or checkin_ev or flashes or changes)
+
+
+def _signal_words(c, p, start: float, end: float, units: str = "C") -> dict:
     """What Autopilot measured through the night (its logged signals), as short averages / peaks."""
     out = {}
     for k, label in (("restless", "restlessness 0-1"), ("hr_rise", "heart rate vs settled, bpm"),
-                     ("wear_hr_rise", "watch heart rate vs settled, bpm"), ("skin_delta", "skin temperature change, °C"),
-                     ("room_vs_usual", "room vs its usual, °C"), ("score", "Autopilot discomfort score")):
+                     ("wear_hr_rise", "watch heart rate vs settled, bpm"), ("skin_delta", "skin temperature change"),
+                     ("room_vs_usual", "room vs its usual"),
+                     ("score", "Autopilot discomfort score (+ means warm, - means cold; it acts at about ±1)")):
         v = [x for _, x in c.store.samples(f"ap:{p.id}:{k}", start, end)]
         if len(v) >= 3:
-            out[label] = {"avg": round(sum(v) / len(v), 2), "peak": round(max(v, key=abs), 2)}
+            avg, peak = sum(v) / len(v), max(v, key=abs)
+            if k in ("skin_delta", "room_vs_usual"):
+                out[label] = {"avg": fmt_delta(avg, units), "peak": fmt_delta(peak, units)}
+            else:
+                out[label] = {"avg": round(avg, 2), "peak": round(peak, 2)}
     return out or {"note": "Autopilot logged no signals that night"}
 
 
@@ -1025,6 +1098,7 @@ def _suggest(c, p) -> list[dict]:
 
 async def _review(state, p, d: str | None, question: str | None) -> dict:
     from . import ai
+    from .notify import checkin_of
     c = state.controller
     now = c.clock.now_ts()
     dd = _day(d) if d else night_date(datetime.fromtimestamp(now, c.clock.tz))
@@ -1033,7 +1107,10 @@ async def _review(state, p, d: str | None, question: str | None) -> dict:
         raise HTTPException(404, "no rhythm that night")
     start, end = win
     s = summarize(c.store, p, dd, c.clock.tz, now) or {}
-    evs = [x for x in c.store.events(since=start, limit=3000, person=p.id) if x["ts"] <= end and x.get("person") == p.id]
+    evs = sorted(
+        (x for x in c.store.events(since=start, limit=3000, person=p.id) if x["ts"] <= end and x.get("person") == p.id),
+        key=lambda x: x["ts"],
+    )
     rh = pick_rhythm(p.rhythms, dd)
     skin = c.autopilot.skin(p, start, end)
     tzname = c.clock.tz
@@ -1041,12 +1118,14 @@ async def _review(state, p, d: str | None, question: str | None) -> dict:
     units = p.settings.units
 
     def hm(t):
-        return datetime.fromtimestamp(t, tzname).strftime("%H:%M")
+        return _review_hm(t, p.settings, tzname)
 
-    def short_reason(x):
-        return ", ".join(f"{r['signal']} {r['value']}" for r in (x.get("reasons") or []))
+    noticed, taps, flashes, tap_evs = _review_events(evs, rh, units, hm)
+    fb = c.store.get(f"feedback:{p.id}:{dd.isoformat()}")
+    checkin = checkin_of(fb) if fb else None
+    if checkin and checkin.get("note"):
+        checkin["note"] = _clip_note(checkin["note"])
 
-    ap = [x for x in evs if x["kind"] == "autopilot"]
     ctx = {
         "person": {"name": p.name, "runs": {"tide": "warm", "ember": "cold"}.get(p.persona, "varies"), "units": units,
                    "language": p.settings.language, "clock": clock_style(p.settings)},
@@ -1055,15 +1134,17 @@ async def _review(state, p, d: str | None, question: str | None) -> dict:
         "rhythm_id": rh.id if rh else None,
         "season": _season(dd, getattr(tzname, "key", None), c.household.hemisphere),
         "night": {k: s.get(k) for k in ("in_bed_min", "time_to_settle_min", "times_up", "hr_avg", "hr_low", "hot_flashes", "cold_flashes", "adjustments")},
-        "bed_vs_plan": ({"avg_gap_c": s.get("tracking_c"), "means": "how far the bed was from its setting on average (small = it followed the plan)"}
+        "bed_vs_plan": ({"typical_gap": fmt_gap(s["tracking_c"], units),
+                         "means": "the typical distance between the bed and its setting, in either direction (small = it followed the plan)"}
                         if s.get("tracking_c") is not None else "not known"),
-        "autopilot_noticed": [f"{hm(x['ts'])} {x.get('phase')}: {x.get('status')} {x.get('direction')} ({short_reason(x)})"
-                              + (f" held back: {x['blocked_by'][0]}" if x.get("blocked_by") else "") for x in ap[:12]],
-        "their_taps": [f"{hm(x['ts'])} {x.get('phase')}: {x.get('feel')}" + (f' "{x["note"]}"' if x.get("note") else "") for x in evs if x["kind"] == "feel"][:12],
-        "flashes": [f"{hm(x['ts'])} {x['kind']}" for x in evs if x["kind"] in ("hot_flash", "cold_flash")][:8],
+        "autopilot_noticed": noticed,
+        "their_taps": taps,
+        "flashes": flashes,
         "their_changes": _change_words(evs, rh, units, hm),
-        "morning_checkin": c.store.get(f"feedback:{p.id}:{dd.isoformat()}"),
-        "skin_temp_c": {"samples": len(skin), "min": min((v for _, v in skin), default=None), "max": max((v for _, v in skin), default=None)} if skin else "no wearable data",
+        "morning_checkin": checkin,
+        "skin_temp": ({"samples": len(skin), "min": fmt_temp(min(v for _, v in skin), units),
+                       "max": fmt_temp(max(v for _, v in skin), units)}
+                      if skin else "no wearable data"),
         "room": _room_words(_room_summary(c, start, end), units),
         "pad_vs_setting": _pad_words([v for _, v in c.store.samples(f"ap:{p.id}:pad_over", start, end)], units),
         "trends_30_nights": [t["title"] for t in _trends(c, p, 30)],
@@ -1077,11 +1158,10 @@ async def _review(state, p, d: str | None, question: str | None) -> dict:
     ctx["autopilot"] = {
         "mode": p.settings.autopilot.mode,
         "still_learning": (lambda lr: None if lr["done"] else f"{lr['have']} of {lr['need']} nights")(c.autopilot.learning(p, now)),
-        "signals_overnight": _signal_words(c, p, start, end),
+        "signals_overnight": _signal_words(c, p, start, end, units),
         "pending_suggestions": [f"{x['title']}: {x['detail']}" for x in _suggest(c, p)][:5],
     }
-    ctx["evidence_tonight"] = bool(ctx["autopilot_noticed"] or ctx["their_taps"] or ctx["morning_checkin"] or ctx["flashes"]
-                                   or ctx["their_changes"])
+    ctx["evidence_tonight"] = _has_evidence(noticed, tap_evs, checkin, flashes, ctx["their_changes"])
     eff = ai.effective(state.cfg, c.store)
     if not ai.configured(eff):
         sug = _suggest(c, p)
@@ -1108,8 +1188,7 @@ async def _review(state, p, d: str | None, question: str | None) -> dict:
             proposal = None
         out = {"answer": answer, "proposal": proposal, "model": ai.model_name(eff), "ts": now, "date": dd.isoformat()}
     # what the review knew of the morning check-in, so a later or changed check-in can have it rewritten
-    from .notify import checkin_of
-    out["checkin"] = checkin_of(ctx["morning_checkin"])
+    out["checkin"] = checkin_of(fb)
     if question:
         out["asked"] = True
     c.store.put(f"ai_review:{p.id}:{dd.isoformat()}", out)
