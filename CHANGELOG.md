@@ -5,6 +5,17 @@ minor versions, and each entry says what to check when upgrading.
 
 ## Unreleased
 
+## 0.1.20
+
+The night review reads your night correctly. Update the server; the apps need no changes for this one.
+
+- **Your own changes read the right way round.** Turning the dial down now reads as cooler in the review, with the
+  amount, what the plan had, and what you used, in your units. Before, it could describe a turn down as a turn up.
+- **Everything in your units, clock and order.** Autopilot's notes, signals, skin temperature and how closely the bed
+  followed the plan are in your units; times use your clock; events are in order, with your phase names.
+- **A "just right" morning stays just right.** A check-in or tap that says the temperature was right no longer makes
+  the review suggest changes.
+
 ## 0.1.19
 
 The review listens to your morning check-in, and check-ins now count toward suggestions. Update the server; the apps
