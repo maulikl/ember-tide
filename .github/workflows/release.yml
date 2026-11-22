@@ -128,6 +128,14 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
+          # Gradle's downloaded libraries, from the cache CI saves on main (same key as ci-android.yml in the pipeline):
+          # a release then downloads almost nothing, so Maven Central's rate limit (429) can't fail it. A tag run can only
+          # read caches saved by its own tag or by main, never one from a pull request, and main's cache comes from
+          # merged code only.
+          cache: gradle
+          cache-dependency-path: |
+            web/android/**/*.gradle*
+            web/android/**/gradle-wrapper.properties
       - name: Web build and Capacitor sync
         working-directory: web
         run: |
