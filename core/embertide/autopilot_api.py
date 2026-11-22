@@ -83,6 +83,8 @@ How to read the numbers (get these right):
   time of year: in a cold room or cold weather a person who runs warm can still choose fairly warm settings and be comfortable.
   Always weigh "room" (the bedroom's measured temperature) and "pad_vs_setting" (whether the pad reached its setting)
   before calling a setting too warm or too cool, and mention the room when it matters.
+- "their_changes" are already worded: LOWERED means they made it cooler, RAISED means warmer. Keep that direction
+  and those temperatures exactly; never work out a direction from the numbers yourself.
 - "runs" (warm/cold) is only a general description of the person. It is NOT evidence about this night.
 - Evidence about this night is only: their taps, their flashes, their own changes, their morning check-in, and what
   Autopilot noticed. If "evidence_tonight" is false, there was no sign of discomfort: say the night looked comfortable
@@ -599,6 +601,63 @@ def _room_summary(c, start: float, end: float) -> dict | None:
             "humidity": {"min": min(hv), "max": max(hv), "avg": round(sum(hv) / len(hv))} if hv else None}
 
 
+CHANGE_SOURCES = {"app": "the phone", "ha": "a dial or Home Assistant", "studio": "Studio", "voice": "voice",
+                  "watch": "the watch", "assistant": "the assistant"}
+
+
+def _change_words(evs: list[dict], rh, units: str, hm) -> list[str]:
+    """The person's own changes that night, worded with their direction, in their unit and against the plan. Raw
+    numbers (an absolute °C setting, unsigned) let the review read a dial turned down as turned up. Quick turns of the
+    same phase (a dial, a few taps of −) are one change, from where it was before to where they left it."""
+    plan = {ph.id: ph for ph in (rh.phases if rh else [])}
+    cur: dict[str, float] = {}                 # where each phase was set, while a change of theirs held
+    out: list[dict] = []
+    for x in sorted(evs, key=lambda e: e["ts"]):
+        if x.get("source") in ("autopilot", None):
+            continue
+        if x["kind"] == "adjust_cleared":
+            cur = {}
+            out.append({"ts": x["ts"], "text": f"{hm(x['ts'])}: went back to the rhythm's settings"})
+            continue
+        if x["kind"] != "adjust" or not x.get("phase"):
+            continue
+        ph = plan.get(x["phase"])
+        planned = ph.temp_c if ph else None
+        before = cur.get(x["phase"], planned)
+        if x.get("total_temp_c") is not None:
+            after = float(x["total_temp_c"])
+        elif x.get("total_delta_c") is not None and planned is not None:
+            after = planned + float(x["total_delta_c"])
+        else:
+            continue
+        cur[x["phase"]] = after
+        last = out[-1] if out else None
+        if last and last.get("phase") == x["phase"] and x["ts"] - last["end"] <= 600:
+            last.update(end=x["ts"], after=after, source=last["source"] or x.get("source"))
+        else:
+            out.append({"ts": x["ts"], "end": x["ts"], "phase": x["phase"], "name": ph.name if ph else x["phase"],
+                        "before": before, "after": after, "planned": planned, "source": x.get("source")})
+    lines = []
+    for b in out:
+        if "text" in b:
+            lines.append(b["text"])
+            continue
+        by = CHANGE_SOURCES.get(b["source"], b["source"] or "the app")
+        head = f"{hm(b['ts'])} {b['name']}"
+        if b["before"] is None or fmt_temp(b["before"], units) == fmt_temp(b["after"], units):
+            line = f"{head}: set to {fmt_temp(b['after'], units)} by {by}"
+        else:
+            d = b["after"] - b["before"]
+            line = (f"{head}: they {'LOWERED' if d < 0 else 'RAISED'} it from {fmt_temp(b['before'], units)} to "
+                    f"{fmt_temp(b['after'], units)} ({fmt_gap(d, units)} {'cooler' if d < 0 else 'warmer'}) by {by}")
+        if b["planned"] is not None and fmt_temp(b["planned"], units) != fmt_temp(b["after"], units):
+            gap = b["after"] - b["planned"]
+            line += (f"; the rhythm had {fmt_temp(b['planned'], units)}, so it ended {fmt_gap(gap, units)} "
+                     f"{'cooler' if gap < 0 else 'warmer'} than planned")
+        lines.append(line)
+    return lines[:8]
+
+
 def _room_words(r: dict | None, units: str = "C") -> dict | str:
     """The bedroom in words a model reads right (bare min/max numbers got ignored), in the person's unit."""
     if not r or not r.get("temp_c"):
@@ -1002,7 +1061,7 @@ async def _review(state, p, d: str | None, question: str | None) -> dict:
                               + (f" held back: {x['blocked_by'][0]}" if x.get("blocked_by") else "") for x in ap[:12]],
         "their_taps": [f"{hm(x['ts'])} {x.get('phase')}: {x.get('feel')}" + (f' "{x["note"]}"' if x.get("note") else "") for x in evs if x["kind"] == "feel"][:12],
         "flashes": [f"{hm(x['ts'])} {x['kind']}" for x in evs if x["kind"] in ("hot_flash", "cold_flash")][:8],
-        "their_changes": [f"{hm(x['ts'])} {x.get('delta_c') or x.get('temp_c')}" for x in evs if x["kind"] == "adjust" and x.get("source") != "autopilot"][:8],
+        "their_changes": _change_words(evs, rh, units, hm),
         "morning_checkin": c.store.get(f"feedback:{p.id}:{dd.isoformat()}"),
         "skin_temp_c": {"samples": len(skin), "min": min((v for _, v in skin), default=None), "max": max((v for _, v in skin), default=None)} if skin else "no wearable data",
         "room": _room_words(_room_summary(c, start, end), units),
