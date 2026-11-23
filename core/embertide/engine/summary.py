@@ -233,6 +233,17 @@ def _lying_in(events: list[dict]) -> bool:
     return last is not None and not any(e["kind"] == "night_done" and e["ts"] >= last for e in events)
 
 
+def _ended_early(events: list[dict]) -> bool:
+    """The engine already ended this night (an alarm-led wake, getting up after the alarm, ending it by hand) before the
+    schedule's end. 2026-11-23: the morning review went out at 8:53 but Sleep → Review kept showing the night before
+    until the rhythm's 9:45 end, because the night still counted as in progress."""
+    done = max((e["ts"] for e in events if e["kind"] == "night_done"), default=None)
+    if done is None:
+        return False
+    started = max((e["ts"] for e in events if e["kind"] in ("rhythm_started", "rhythm_restarted")), default=None)
+    return started is None or done > started
+
+
 def _summarize(store: Store, person: Person, d: date, tz: ZoneInfo, now: float, series: bool, start: float, end: float) -> dict | None:
     rows = store.history(person.zone, start, end, person=person.id)
     # the person's own events, plus pets seen on their side (stored without a person)
@@ -250,7 +261,7 @@ def _summarize(store: Store, person: Person, d: date, tz: ZoneInfo, now: float, 
     full_end = usual.end if usual else 0
     usual_bed = usual.bedtime if usual else None
     base = {"date": d.isoformat(), "label": datetime(d.year, d.month, d.day).strftime("%a, %b ") + str(d.day),
-            "in_progress": now < full_end or _lying_in(events), "feedback": fb,
+            "in_progress": (now < full_end and not _ended_early(events)) or _lying_in(events), "feedback": fb,
             # the night before a work day or a day off, by this person's own work days (someone may work weekends)
             "before": "work" if (d.weekday() + 1) % 7 in person.settings.work_days else "off"}
     if not rows:

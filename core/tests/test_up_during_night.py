@@ -101,3 +101,17 @@ async def test_engine_records_night_done_once(tmp_path):
     await n.until("2026-11-06T09:00", dt=60)
     for p in (n.p1, n.p2):
         assert len([e for e in n.events("night_done") if e.get("person") == p.id]) == 1
+
+
+def test_night_ended_by_the_alarm_is_finished_before_the_schedule(tmp_path):
+    # 2026-11-23: up with the alarm at 8:53, rhythm end 9:45. The review went out at 8:53 but Sleep → Review skips
+    # nights in progress, so it showed the night before until 9:45.
+    end0 = resolve(pick_rhythm(Night(tmp_path / "x", "2026-11-11T20:00", echo=False).p1.rhythms, D), D, TZ).end
+    done = end0 - 2700
+    n, p, end = _build(tmp_path / "y", [(_t("01:00"), done, 1), (done, done + 600, 0)])
+    assert _sum(n, p, done + 600)["in_progress"]                       # no night_done yet: still the schedule's night
+    n.store.event(done, "night_done", person=p.id, end=done)
+    assert not _sum(n, p, done + 600)["in_progress"]
+    # a lie-in after the night was done keeps it open until that ends
+    n.store.event(done + 700, "lie_in_started", person=p.id, end=done, until=done + 7200)
+    assert _sum(n, p, done + 800)["in_progress"]
