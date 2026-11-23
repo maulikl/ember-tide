@@ -5,6 +5,14 @@ minor versions, and each entry says what to check when upgrading.
 
 ## Unreleased
 
+## 0.1.21
+
+The night review opens on the night that just ended. Update the server; the apps need no changes for this one.
+
+- **Last night is ready as soon as you're up.** When the alarm or getting up ends the night early, Sleep → Review now
+  shows that night right away. Before, it kept showing the night before until the rhythm's scheduled end time, even
+  though the review notification had already arrived.
+
 ## 0.1.20
 
 The night review reads your night correctly. Update the server; the apps need no changes for this one.
