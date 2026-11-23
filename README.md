@@ -7,6 +7,9 @@ app, Home Assistant, a bedside dial, a watch and whatever sensors you already ha
 
 **Unofficial:** an independent community project, not affiliated with or endorsed by Orion Sleep or its maker. "Orion" only names the hardware it works with.
 
+**Found a bug, have an idea, or changed something in a fork? Please tell us.** [Open an issue](https://github.com/Ncbudd/ember-tide/issues/new/choose)
+or send a pull request, so everyone gets the fix. Questions go to [Discussions](https://github.com/Ncbudd/ember-tide/discussions). More in [Contributing](#contributing).
+
 ## Beta testing
 
 New here as a tester? Read [TESTING.md](TESTING.md) first: safety notes, the recommended first path (the simulator, then the `orion-cloud` driver, no network changes), what to try this round and how to report problems.
@@ -208,8 +211,17 @@ cloud for a while ([how](docs/bed-cutover.md#updating-the-firmware-on-your-terms
 
 ## Contributing
 
-Bug reports, hardware support requests and pull requests are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) (setup, tests, style, the plain-language
-rule, no personal data) and the [Code of Conduct](CODE_OF_CONDUCT.md). Security issues: [SECURITY.md](SECURITY.md). Changes: [CHANGELOG.md](CHANGELOG.md).
+Issues and pull requests are very welcome, small ones included: a typo, a confusing sentence, a setting that didn't make sense.
+
+- **Something broke or looks wrong?** [Report a bug](https://github.com/Ncbudd/ember-tide/issues/new/choose). Logs and what you expected help most.
+- **A different bed, sensor or watch?** Use the hardware support template on the same page.
+- **An idea?** Open a feature request. Features are agreed in the issue before work starts, so nobody's effort goes to waste.
+- **Fixed or added something in your fork?** Please send it back as a pull request rather than keeping it only in the fork.
+  Read [CONTRIBUTING.md](CONTRIBUTING.md) first (setup, tests, style, the plain-language rule, no personal data).
+- **Not sure?** Ask in [Discussions](https://github.com/Ncbudd/ember-tide/discussions).
+
+Please follow the [Code of Conduct](CODE_OF_CONDUCT.md). Security issues go privately through [SECURITY.md](SECURITY.md), never a public issue.
+Changes: [CHANGELOG.md](CHANGELOG.md).
 
 ## Credits
 
