@@ -1,6 +1,7 @@
 """Garmin through each person's own Personal API key: connecting, the key and its token, access and safety, all
 against a fake Garmin (garmin_fake.py) with synthetic values."""
 
+import asyncio
 import json
 import logging
 import os
@@ -16,6 +17,7 @@ from garmin_fake import HOST, HR_PATH, HRV_PATH, KEY, SLEEP_PATH, TOKEN_PATH, Fa
 
 from embertide.app import create_app
 from embertide.cloud import NOT_AVAILABLE
+from embertide.cloud.base import CloudError
 from embertide.cloud.sealed import KEY_FILE
 from embertide.config import Config
 
@@ -464,3 +466,40 @@ def test_requests_are_paced_one_at_a_time(tmp_path):
         assert look(c).status_code == 200                          # 401, renewal, retry, then six more data calls
         assert len(fake.calls) - n == 9
         assert waits == [0.5] * 9
+
+
+def test_backoff_set_while_waiting_on_lock_skips_garmin(tmp_path, monkeypatch):
+    fake = FakeGarmin()
+    with client(tmp_path) as c:
+        p = garmin(c, fake)
+        at(c, "2026-11-05T12:00")
+        assert connect(c).status_code == 200
+        assert look(c).status_code == 200
+
+        async def run():
+            entered = asyncio.Event()
+            release = asyncio.Event()
+            orig_fetch = p.fetch
+
+            async def slow_fetch(pid, start, end, now):
+                entered.set()
+                await release.wait()
+                return await orig_fetch(pid, start, end, now)
+
+            monkeypatch.setattr(p, "fetch", slow_fetch)
+            t1 = asyncio.create_task(p.sync("p2"))
+            await entered.wait()
+            n = len(fake.calls)
+            t2 = asyncio.create_task(p.sync("p2"))
+            t3 = asyncio.create_task(p.connect_key("p2", "k-synthetic-another-1"))
+            await asyncio.sleep(0)
+            await asyncio.sleep(0)
+            fake.status_at[fake.data_calls + 1] = (429, {"retry-after": "120"})
+            release.set()
+            for task in (t1, t2, t3):
+                with pytest.raises(CloudError) as err:
+                    await task
+                assert err.value.status == 429
+            assert len(fake.calls) - n == 1                         # only t1's 429 call; t2 and t3 made none
+
+        c.portal.call(run)

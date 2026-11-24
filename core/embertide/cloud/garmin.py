@@ -233,6 +233,8 @@ class Garmin(CloudConnector):
         if self._backing_off(pid):
             raise CloudError(BUSY, 429)
         async with self._locks.setdefault(pid, asyncio.Lock()):
+            if self._backing_off(pid):
+                raise CloudError(BUSY, 429)                    # another look hit 429 while this one waited on the lock
             try:
                 token, expires_at = await self._exchange(key)
             except CloudError as e:
@@ -311,7 +313,10 @@ class Garmin(CloudConnector):
                 n = night(s)
                 if n is not None:
                     out.periods.append(n)
-                    nights[_night_date(s, n["end"], tz)] = n
+                    day = _night_date(s, n["end"], tz)
+                    prev = nights.get(day)
+                    if prev is None or n["end"] - n["start"] > prev["end"] - prev["start"]:
+                        nights[day] = n
                     for metric, v in night_numbers(s).items():
                         out.add(metric, n["end"], v)       # the night's own numbers, stamped at its end
                 naps = s.get("dailyNapDTOS")
@@ -358,6 +363,8 @@ class Garmin(CloudConnector):
         if self._backing_off(pid):
             raise CloudError(BUSY, 429)                        # a manual look during a back-off: no call to Garmin
         async with self._locks.setdefault(pid, asyncio.Lock()):
+            if self._backing_off(pid):
+                raise CloudError(BUSY, 429)                    # another look hit 429 while this one waited on the lock
             self._forced[pid] = 0
             try:
                 return await self._sync(pid, days)
@@ -516,7 +523,7 @@ def _column(desc: object, word: str, default: int) -> tuple[int, str | None]:
 
 def heart(body: object) -> tuple[list[tuple[float, float]], float | None]:
     """A day's heart rate: ([(t, bpm)], resting heart rate or None). Columns come from `heartRateValueDescriptors`,
-    else timestamp then value; rows may be lists or objects; values outside 20 to 250 are dropped."""
+    else timestamp then heartrate/heartRate/value; rows may be lists or objects; values outside 20 to 250 are dropped."""
     b = _obj(body)
     ti, tk = _column(b.get("heartRateValueDescriptors"), "time", 0)
     vi, vk = _column(b.get("heartRateValueDescriptors"), "heart", 1)
@@ -528,7 +535,8 @@ def heart(body: object) -> tuple[list[tuple[float, float]], float | None]:
             v = _in(r[vi], 20, 250) if vi < len(r) else None
         elif isinstance(r, dict):
             t = gts(r.get(tk or "timestamp"))
-            v = _in(r.get(vk or "heartrate", r.get("value")), 20, 250)
+            raw = r.get(vk) if vk else next((r[k] for k in ("heartrate", "heartRate", "value") if r.get(k) is not None), None)
+            v = _in(raw, 20, 250)
         else:
             continue
         if t is not None and v is not None:

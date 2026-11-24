@@ -212,6 +212,39 @@ def test_parsers_never_raise():
     assert g.night_numbers({"sleepScores": {"overall": {"value": 101}}, "averageRespirationValue": 3, "averageSpO2Value": 49}) == {}
 
 
+def test_heart_object_row_keys():
+    t0 = 1793851200000
+    rows = [
+        {"timestamp": t0, "heartrate": 60},
+        {"timestamp": t0 + 60_000, "heartRate": 61},
+        {"timestamp": t0 + 120_000, "value": 62},
+        {"timestamp": t0 + 180_000, "heartrate": None, "heartRate": 63, "value": 64},
+    ]
+    assert g.heart({"heartRateValues": rows}) == (
+        [(1793851200.0, 60.0), (1793851260.0, 61.0), (1793851320.0, 62.0), (1793851380.0, 63.0)],
+        None,
+    )
+
+
+def test_longer_sleep_wins_for_same_calendar_date(tmp_path):
+    shorter = {"id": 77002, "calendarDate": NIGHT_DAY,
+               "sleepStartTimestampGMT": ms("2026-11-05T13:00"), "sleepEndTimestampGMT": ms("2026-11-05T14:00"),
+               "sleepTimeSeconds": 55 * 60}
+    data = ex008()
+    data[SLEEP_PATH] = lambda req: httpx.Response(200, json=[a_night(), shorter])
+    fake = FakeGarmin(data)
+    with client(tmp_path) as c:
+        garmin(c, fake)
+        at(c, "2026-11-05T15:00")
+        connect(c)
+        assert look(c).status_code == 200
+        by_id = {x["id"]: x for x in sleeps(c)}
+        assert {"garmin:77001", "garmin:77002"} <= set(by_id)
+        assert by_id["garmin:77001"]["hrv_avg"] == 47
+        assert by_id["garmin:77002"]["hrv_avg"] is None
+        assert series(c, "resting_hr") == [(ts("2026-11-05T06:30"), 52.0)]
+
+
 def test_odd_answers_do_not_stop_a_sync(tmp_path):
     def sleep(req):
         return httpx.Response(200, json=[None, "junk", {"sleepStartTimestampGMT": True}, {"id": None, "sleepScores": None},
