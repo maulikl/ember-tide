@@ -5,8 +5,21 @@ minor versions, and each entry says what to check when upgrading.
 
 ## Unreleased
 
+## 0.1.22
+
+Garmin connects directly, cloud accounts catch up after a gap, and "Not now" works from the notification. Update the
+server and the phone app: the Garmin card is new in both.
+
 - **Garmin connects directly.** Each person pastes their own Garmin key (Settings → Watch or ring) and their sleep,
-  heart rate and HRV arrive after waking, then every hour. Nothing for the owner to set up.
+  heart rate and HRV arrive after waking, then every hour. Nothing for the owner to set up. The key is stored
+  encrypted on your server. You can say how long the key lasts to get a reminder a week before it runs out, or skip
+  that. Thanks to @kevinklaes for this one.
+- **Cloud accounts catch up after a gap.** After a key ran out or the server was off for a few days, the next look
+  fetches every night you missed (up to two weeks), not just the last two.
+- **"Not now" works from the notification.** On the morning and review notifications it showed "Couldn't reach
+  Ember & Tide" and the card stayed. It now puts the card away.
+- **Someone else's cloud account isn't shown as yours.** With sign-in on, viewing Settings as another person now says
+  they connect their own account, instead of showing (and changing) yours.
 
 ## 0.1.21
 
