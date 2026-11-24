@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, isApp } from "../api";
+import { useAuth } from "../auth";
 import KeyConnect from "./KeyConnect";
 
 export interface OuraStatus { available: boolean; connected: boolean; needs_reconnect: boolean; connected_at: number | null; last_sync: number | null; last_error: string | null; last_stored?: Record<string, number> | null;
@@ -19,13 +20,23 @@ export default function OuraConnect({ person, compact = false }: { person: strin
 /** Connect this person's account at a wearable maker (Oura, Withings, WHOOP, Polar, Garmin) through its cloud. Garmin connects
  * by the person's own key (KeyConnect); the others by signing in at the maker. */
 export function CloudConnect({ provider, name, person, compact = false }: { provider: string; name: string; person: string; compact?: boolean }) {
+  const auth = useAuth();
+  const mine = !auth.state.enabled || auth.me?.person === person;
   const [st, setSt] = useState<OuraStatus | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
-  const load = () => api.get<OuraStatus>(`/api/cloud/me/${provider}?person=${encodeURIComponent(person)}`).then(setSt).catch(() => setSt(null));
-  useEffect(() => { void load(); }, [person, provider]);
+  const load = () => !mine
+    ? Promise.resolve()
+    : api.get<OuraStatus>(`/api/cloud/me/${provider}?person=${encodeURIComponent(person)}`).then(setSt).catch(() => setSt(null));
+  useEffect(() => { setSt(null); void load(); }, [person, provider, mine]);
   // back from Oura's sign-in page (another tab or the in-app browser): look again
-  useEffect(() => { const on = () => { if (document.visibilityState === "visible") void load(); }; document.addEventListener("visibilitychange", on); return () => document.removeEventListener("visibilitychange", on); }, [person]);
+  useEffect(() => {
+    if (!mine) return;
+    const on = () => { if (document.visibilityState === "visible") void load(); };
+    document.addEventListener("visibilitychange", on);
+    return () => document.removeEventListener("visibilitychange", on);
+  }, [person, provider, mine]);
+  if (!mine) return <p className="mute oura-note">{name} is connected by that person, signed in on their own phone.</p>;
   if (!st) return null;
   if (st.connect === "key") return <KeyConnect provider={provider} name={name} person={person} st={st} compact={compact} reload={() => void load()} />;
   const run = async (label: string, f: () => Promise<unknown>) => {

@@ -40,7 +40,7 @@ export default function KeyConnect({ provider, name, person, st, compact, reload
     try { await f(); return true; } catch (e) { setMsg((e as Error).message); return false; } finally { setBusy(null); reload(); }
   };
   const runsOut = () => {
-    if (!life) return null;
+    if (!life || life === "none") return null;
     const d = new Date();
     if (life === "365") d.setFullYear(d.getFullYear() + 1); else d.setDate(d.getDate() + Number(life));
     return iso(d);
@@ -51,6 +51,11 @@ export default function KeyConnect({ provider, name, person, st, compact, reload
     const ok = await run("connect", () => api.post(`/api/cloud/me/${provider}/connect`, { person, key: k, expires: runsOut() }));
     if (ok) { setLife(""); setReplacing(false); }
   };
+  const disconnectButton = (
+    <button className="link" disabled={!!busy} onClick={() => run("off", () => api.post(`/api/cloud/me/${provider}/disconnect`, { person }))}>
+      {busy === "off" ? "Disconnecting…" : `Disconnect ${name}`}
+    </button>
+  );
 
   const today = new Date();
   const connected = st.connected && !st.needs_reconnect;
@@ -72,7 +77,7 @@ export default function KeyConnect({ provider, name, person, st, compact, reload
         {st.last_error && <p className="warn-text">{st.last_error}</p>}
         {!replacing && <div className="keycard-acts">
           <button className="pill" disabled={!!busy} onClick={() => { setReplacing(true); setMsg(null); }}>Replace key</button>
-          <button className="link" disabled={!!busy} onClick={() => run("off", () => api.post(`/api/cloud/me/${provider}/disconnect`, { person }))}>{busy === "off" ? "Disconnecting…" : `Disconnect ${name}`}</button>
+          {disconnectButton}
         </div>}
         {!replacing && <small className="mute">You can also delete the key at {name} Connect.</small>}
       </>}
@@ -91,15 +96,17 @@ export default function KeyConnect({ provider, name, person, st, compact, reload
               value={key} disabled={!!busy} onChange={e => setKey(e.target.value)} /></label>
           <label className="field"><span>How long it lasts</span>
             <select value={life} disabled={!!busy} onChange={e => setLife(e.target.value)}>
-              <option value="" disabled>Choose what you picked at {name}</option>
+              <option value="" disabled>Choose</option>
+              <option value="none">I'm not sure (no reminder)</option>
               {LIFETIMES.map(o => <option key={o.v} value={o.v}>{o.label}</option>)}
             </select>
             <small className="mute">The same choice you made at {name}. This card reminds you a week before it runs out.</small></label>
         </div>
         <small className="mute">Use only your own key. It stays on this home's server and is used only to read your sleep, heart rate and HRV from {name}.</small>
         <div className="keycard-acts">
-          <button className="btn pri" disabled={!!busy || !key.trim() || !life} onClick={connect}>{busy === "connect" ? "Connecting…" : `Connect ${name}`}</button>
+          <button className="btn pri" disabled={!!busy || !key.trim()} onClick={connect}>{busy === "connect" ? "Connecting…" : `Connect ${name}`}</button>
           {replacing && <button className="btn" disabled={!!busy} onClick={() => { setReplacing(false); setKey(""); setLife(""); setMsg(null); }}>Cancel</button>}
+          {st.connected && st.needs_reconnect && disconnectButton}
         </div>
       </>}
       {msg && <p className="warn-text" role="alert">{msg}</p>}
