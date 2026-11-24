@@ -1,0 +1,9 @@
+# gitleaks settings: the default rules, plus one allowance for the made-up keys and tokens the tests use.
+# Test values are named so they read as fake ("k-synthetic-0123456789", "t-synthetic"); a real key never contains
+# the word "synthetic". Anything else that looks like a secret still fails the check.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Made-up test values"
+regexes = ['''synthetic''']
