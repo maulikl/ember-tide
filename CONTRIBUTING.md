@@ -42,6 +42,9 @@ cd ../web/android && ./gradlew :app:testMinimalDebugUnitTest :app:assembleMinima
 Every pull request also runs the security checks (Semgrep, Trivy, gitleaks, CodeQL and dependency review). Fill in
 the pull request template: root cause, fix, how you verified it, and a release note.
 
+Made-up keys and tokens in tests should contain the word `synthetic` (for example `k-synthetic-0123456789`), so the
+secret scan knows they are fake (`.gitleaks.toml`).
+
 - Behaviour changes come with tests. Tests that need private real-world data (for example `test_real_hc.py`, through `ET_REAL_HC`) skip
   themselves when it is absent. Run only the files you touched while iterating, then the whole suite once.
 - Keep pull requests small and about one thing. Say what changed and why, and how you checked it.
