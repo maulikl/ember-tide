@@ -76,6 +76,9 @@ def test_device_key_does_exactly_its_own_side_calls(home):
     # notification answers reach the route (no such question → the route's own 404/422, not a 403)
     assert bare.post("/api/people/p2/away-check", json={"night": "2026-01-01", "answer": "home"}, headers=k).status_code not in (401, 403)
     assert bare.post("/api/people/p2/pet-question/abc123", json={"answer": "me"}, headers=k).status_code not in (401, 403)
+    # "Not now" on the morning / review notification (EmberPush card_later). 2026-11-24: missing here, so every tap said
+    # "Couldn't reach Ember & Tide" (the server answered 403)
+    assert bare.post("/api/people/p2/morning/dismiss", json={"id": "sugg-2026-01-01"}, headers=k).status_code not in (401, 403)
 
 
 def test_device_key_forbidden_routes(home):
@@ -118,6 +121,7 @@ def test_watch_scope_is_narrower(home):
     assert bare.post("/api/people/p2/flash", json={"kind": "hot", "source": "watch"}, headers=k).status_code == 200
     assert bare.post("/api/people/p2/feedback", json={"temp": "right"}, headers=k).status_code == 403
     assert bare.post("/api/people/p2/pet-question/abc", json={"answer": "me"}, headers=k).status_code == 403
+    assert bare.post("/api/people/p2/morning/dismiss", json={"id": "sugg-2026-01-01"}, headers=k).status_code == 403
 
 
 def test_viewer_device_key_can_only_look(home):
