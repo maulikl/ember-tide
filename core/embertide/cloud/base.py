@@ -268,14 +268,16 @@ class CloudConnector:
         st = self.store.get(self.k("status", pid), {}) or {}
         self._status(pid, last_attempt=now)
         fresh = st.get("last_sync") and (st.get("data_version") or 1) >= self.data_version
+        today = datetime.fromtimestamp(now, c.clock.tz).date()
         if days:
             back = days
         elif fresh:
-            gap = now - st["last_sync"]
-            back = min(self.first_days, int(gap // 86400) + 1) if gap > 2 * 86400 else 2
+            # counted in calendar days on the home clock, so a sync a few seconds short of 6 x 24 h later still reaches
+            # back over the whole gap (and daylight-saving days don't shift it)
+            gap_days = (today - datetime.fromtimestamp(st["last_sync"], c.clock.tz).date()).days
+            back = min(self.first_days, gap_days + 1) if gap_days > 2 else 2
         else:
             back = self.first_days
-        today = datetime.fromtimestamp(now, c.clock.tz).date()
         try:
             data = await self.fetch(pid, today - timedelta(days=back), today + timedelta(days=1), now)
         except CloudError as e:

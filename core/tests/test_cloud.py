@@ -309,7 +309,9 @@ def test_sync_lookback_grows_after_a_gap(tmp_path):
         assert c.post("/api/cloud/me/whoop/sync", json={"person": "p2"}, headers=H).status_code == 200
         assert starts == ["2026-11-04"]                            # recent sync: still 2 days back
         starts.clear()
-        c.post("/api/sim", json={"jump_to": "2026-11-12T12:00"}, headers=H)
+        # a few hours short of 6 x 24 h, still six calendar days: the whole gap (2026-11-24: the release run was a few
+        # simulated seconds short of 6 days and looked back one day less)
+        c.post("/api/sim", json={"jump_to": "2026-11-12T06:00"}, headers=H)
         assert c.post("/api/cloud/me/whoop/sync", json={"person": "p2"}, headers=H).status_code == 200
         assert starts == ["2026-11-05"]                            # 6 days later: 7 days back
         starts.clear()
