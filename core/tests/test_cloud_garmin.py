@@ -70,7 +70,7 @@ def test_garmin_is_listed_available(tmp_path):
         raw = c.get("/api/cloud/providers").json()["providers"]
         g = next(x for x in raw if x["id"] == "garmin")
         assert g["available"] and g["configured"] and g["connect"] == "key" and g["name"] == "Garmin"
-        assert g["connected"] == {"p1": False, "p2": False} and g["gives"] and "garmin.com" in g["docs_url"]
+        assert g["connected"] == {"p1": False, "p2": False} and g["gives"] and urlsplit(g["docs_url"]).hostname == "developer.garmin.com"
         assert "why" not in g and "scopes" not in g and "redirect_uri" not in g
         assert [x["id"] for x in raw if x["available"]] == ["oura", "withings", "whoop", "polar", "garmin"]
         assert [x["id"] for x in NOT_AVAILABLE] == ["fitbit", "samsung", "apple"]
