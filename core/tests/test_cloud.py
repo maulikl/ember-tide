@@ -282,3 +282,41 @@ def test_json_poller_with_header_auth(tmp_path):
         g.store.put("cloud_polls", [{**g.polls[0], "headers": {"X-Api-Key": "wrong"}, "last_ts": 0}])
         asyncio.run(g.tick())
         assert g.polls[0]["last_error"] == "answered 401" and not g.polls[0]["last_ok"]
+
+
+def test_sync_lookback_grows_after_a_gap(tmp_path):
+    starts: list[str] = []
+
+    def token(req):
+        return httpx.Response(200, json={"access_token": "wh1", "refresh_token": "whr1", "expires_in": 3600})
+
+    def sleep(req):
+        starts.append(parse_qs(urlsplit(str(req.url)).query)["start"][0][:10])
+        return httpx.Response(200, json={"records": [], "next_token": None})
+
+    def rec(req):
+        return httpx.Response(200, json={"records": []})
+
+    fake = Fake({("api.prod.whoop.com", "/oauth/oauth2/token"): token,
+                 ("api.prod.whoop.com", "/developer/v2/activity/sleep"): sleep,
+                 ("api.prod.whoop.com", "/developer/v2/recovery"): rec})
+    with client(tmp_path) as c:
+        c.post("/api/sim", json={"jump_to": "2026-11-05T12:00"}, headers=H)
+        p, _ = connect(c, "whoop", fake)
+        assert c.post("/api/cloud/me/whoop/sync", json={"person": "p2"}, headers=H).status_code == 200
+        starts.clear()
+        c.post("/api/sim", json={"jump_to": "2026-11-06T12:00"}, headers=H)
+        assert c.post("/api/cloud/me/whoop/sync", json={"person": "p2"}, headers=H).status_code == 200
+        assert starts == ["2026-11-04"]                            # recent sync: still 2 days back
+        starts.clear()
+        c.post("/api/sim", json={"jump_to": "2026-11-12T12:00"}, headers=H)
+        assert c.post("/api/cloud/me/whoop/sync", json={"person": "p2"}, headers=H).status_code == 200
+        assert starts == ["2026-11-05"]                            # 6 days later: 7 days back
+        starts.clear()
+        c.post("/api/sim", json={"jump_to": "2026-12-22T12:00"}, headers=H)
+        assert c.post("/api/cloud/me/whoop/sync", json={"person": "p2"}, headers=H).status_code == 200
+        assert starts == ["2026-12-08"]                            # 40 days later: capped at first_days (14)
+        starts.clear()
+        c.post("/api/sim", json={"jump_to": "2027-01-20T12:00"}, headers=H)
+        c.portal.call(p.sync, "p2", 5)
+        assert starts == ["2027-01-15"]                            # explicit days argument still wins

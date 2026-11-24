@@ -268,7 +268,13 @@ class CloudConnector:
         st = self.store.get(self.k("status", pid), {}) or {}
         self._status(pid, last_attempt=now)
         fresh = st.get("last_sync") and (st.get("data_version") or 1) >= self.data_version
-        back = days if days else (2 if fresh else self.first_days)
+        if days:
+            back = days
+        elif fresh:
+            gap = now - st["last_sync"]
+            back = min(self.first_days, int(gap // 86400) + 1) if gap > 2 * 86400 else 2
+        else:
+            back = self.first_days
         today = datetime.fromtimestamp(now, c.clock.tz).date()
         try:
             data = await self.fetch(pid, today - timedelta(days=back), today + timedelta(days=1), now)
