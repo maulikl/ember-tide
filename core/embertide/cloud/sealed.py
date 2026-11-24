@@ -19,6 +19,7 @@ import json
 import os
 import re
 import threading
+import time
 from pathlib import Path
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -75,17 +76,41 @@ class Sealer:
         key = os.urandom(KEY_BYTES)
         try:
             fd = os.open(str(f), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        except FileExistsError:                 # made by someone else in the meantime: use theirs
-            try:
-                return self._read(f)
-            except FileNotFoundError:
-                raise SealError("the secret key file cannot be read") from None
+        except FileExistsError:                 # made by someone else in the meantime: wait briefly if still being written
+            for attempt in range(8):
+                try:
+                    existing = f.read_bytes()
+                except OSError:
+                    raise SealError("the secret key file cannot be read") from None
+                if len(existing) == KEY_BYTES:
+                    return existing
+                if len(existing) > KEY_BYTES:
+                    break
+                if attempt < 7:
+                    time.sleep(0.05)
+            raise SealError("the secret key file is not a valid key")
         except OSError:
             raise SealError("the secret key file cannot be made") from None
         try:
-            with os.fdopen(fd, "wb") as out:
+            out = os.fdopen(fd, "wb")
+        except OSError:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+            try:
+                f.unlink()
+            except OSError:
+                pass
+            raise SealError("the secret key file cannot be written") from None
+        try:
+            with out:
                 out.write(key)
         except OSError:
+            try:
+                f.unlink()
+            except OSError:
+                pass
             raise SealError("the secret key file cannot be written") from None
         return key
 

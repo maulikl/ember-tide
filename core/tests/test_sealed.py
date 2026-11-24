@@ -2,6 +2,7 @@
 
 import os
 import stat
+import time
 
 import pytest
 
@@ -77,3 +78,49 @@ def test_unwritable_folder_refuses(tmp_path):
         s.seal(VALUE, "garmin:p1")
     assert s.open("v1." + "A" * 60, "garmin:p1") is None
     assert not missing.exists()
+
+
+def test_write_failure_removes_broken_file_and_next_seal_works(tmp_path, monkeypatch):
+    class BadWriter:
+        def __init__(self, fd):
+            self._fd = fd
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            os.close(self._fd)
+
+        def write(self, data):
+            raise OSError("disk full")
+
+    monkeypatch.setattr(os, "fdopen", lambda fd, mode: BadWriter(fd))
+    s = Sealer(tmp_path)
+    with pytest.raises(SealError):
+        s.seal(VALUE, "garmin:p1")
+    assert not (tmp_path / KEY_FILE).exists()
+    monkeypatch.undo()
+    blob = s.seal(VALUE, "garmin:p1")
+    assert s.open(blob, "garmin:p1") == VALUE
+
+
+def test_file_exists_waits_for_concurrent_writer(tmp_path, monkeypatch):
+    f = tmp_path / KEY_FILE
+    expected = os.urandom(32)
+    sleeps = 0
+
+    def fake_open(path, flags, mode=0o777):
+        f.write_bytes(b"")
+        raise FileExistsError
+
+    def fake_sleep(secs):
+        nonlocal sleeps
+        sleeps += 1
+        if sleeps == 2:
+            f.write_bytes(expected)
+
+    monkeypatch.setattr(os, "open", fake_open)
+    monkeypatch.setattr(time, "sleep", fake_sleep)
+    blob = Sealer(tmp_path).seal(VALUE, "garmin:p1")
+    assert sleeps == 2
+    assert Sealer(tmp_path).open(blob, "garmin:p1") == VALUE
