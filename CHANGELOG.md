@@ -5,6 +5,14 @@ minor versions, and each entry says what to check when upgrading.
 
 ## Unreleased
 
+## 0.1.23
+
+A small follow-up. Update the server; the apps need no changes for this one.
+
+- **Catching up after a gap counts calendar days.** When a cloud account (Oura, Garmin and the others) missed a few
+  nights, the catch-up could fetch one night too few if the gap was a little under a whole number of days. It now
+  counts the nights on the calendar.
+
 ## 0.1.22
 
 Garmin connects directly, cloud accounts catch up after a gap, and "Not now" works from the notification. Update the
